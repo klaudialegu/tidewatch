@@ -11,7 +11,9 @@ set -euo pipefail
 
 root=$(git rev-parse --show-toplevel)
 list="$root/.private-terms"
-terms=$(grep -v '^[[:space:]]*#' "$list" 2>/dev/null | sed '/^[[:space:]]*$/d' || true)
+# Trimmed (spaces, Windows line endings), so a stray space can't silently disable a term.
+terms=$(tr -d '\r' 2>/dev/null < "$list" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//' \
+  | grep -v '^#' | sed '/^$/d' || true)
 if [ -z "$terms" ]; then
   echo "private-terms: $list is missing or empty, so nothing can be checked. Blocked." >&2
   echo "Create it (it's gitignored) with one private term per line." >&2
@@ -26,12 +28,13 @@ blocked() {
 
 # Reads text on stdin; blocks if any term appears in it.
 scan() {
-  if grep -qiF -f <(printf '%s\n' "$terms"); then blocked "$1"; fi
+  if grep -aqiF -f <(printf '%s\n' "$terms"); then blocked "$1"; fi  # -a: binary as text
 }
 
 case "${1:-}" in
   staged)
-    git diff --cached --no-color -U0 | { grep '^+' || true; } | scan "A staged change"
+    # --text: binary files too (otherwise git prints "Binary files differ" and skips them)
+    git diff --cached --no-color --text -U0 | { grep -a '^+' || true; } | scan "A staged change"
     git diff --cached --name-only | scan "A staged file name"
     (git symbolic-ref --short HEAD 2>/dev/null || true) | scan "The branch name"
     ;;
@@ -43,13 +46,16 @@ case "${1:-}" in
     while read -r local_ref local_sha remote_ref remote_sha; do
       printf '%s\n%s\n' "$local_ref" "$remote_ref" | scan "A branch or tag name being pushed"
       [ "$local_sha" = "$zero" ] && continue  # deleting a remote branch: nothing to scan
+      if [ "$(git cat-file -t "$local_sha")" = tag ]; then  # an annotated tag's own message
+        git cat-file -p "$local_sha" | scan "An annotated tag"
+      fi
       if [ "$remote_sha" = "$zero" ]; then
         range=$(git rev-list "$local_sha" --not --remotes)
       else
         range=$(git rev-list "$remote_sha..$local_sha")
       fi
       for sha in $range; do
-        git show --no-color --format='%B' "$sha" | scan "Commit ${sha:0:7}"
+        git show --no-color --text --format='%B' "$sha" | scan "Commit ${sha:0:7}"
       done
     done
     ;;
