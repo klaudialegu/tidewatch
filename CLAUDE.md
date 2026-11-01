@@ -56,6 +56,7 @@ It is built with Claude Code as a pair programmer, in small reviewed slices, aga
 ## Commands
 - Enable the privacy hooks (once per clone): `git config core.hooksPath .githooks`
 - Check staged changes by hand: `scripts/check-private-terms.sh staged`
+- After a block, find where the term is (file and line numbers only): `scripts/check-private-terms.sh find <file>`
 - (More commands arrive with the code: install, test, lint, lab apply/reset.)
 
 ## Map

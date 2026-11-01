@@ -7,6 +7,7 @@
 #   check-private-terms.sh staged          pre-commit: staged changes, file names, branch
 #   check-private-terms.sh message <file>  commit-msg: the commit message
 #   check-private-terms.sh push            pre-push: commits and refs read from stdin
+#   check-private-terms.sh find <file>...  where a term is: file and line numbers only
 set -euo pipefail
 
 root=$(git rev-parse --show-toplevel)
@@ -22,7 +23,7 @@ fi
 
 blocked() {
   echo "private-terms: blocked. $1 contains a private term (not shown here)." >&2
-  echo "Find it with: grep -inF -f .private-terms <file>   (or check the message/branch)" >&2
+  echo "Find it with: scripts/check-private-terms.sh find <file>   (line numbers only)" >&2
   exit 1
 }
 
@@ -59,8 +60,14 @@ case "${1:-}" in
       done
     done
     ;;
+  find)
+    shift
+    for f in "$@"; do
+      grep -ainF -f <(printf '%s\n' "$terms") "$f" | cut -d: -f1 | sed "s|^|$f: line |" || true
+    done
+    ;;
   *)
-    echo "usage: $0 staged | message <file> | push" >&2
+    echo "usage: $0 staged | message <file> | push | find <file>..." >&2
     exit 2
     ;;
 esac
