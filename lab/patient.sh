@@ -86,7 +86,11 @@ case "$1" in
     echo "chat:   ${chat}"
     key=$(k -n "${NS}" get secret agent-secret -o jsonpath='{.data.API_KEY}' | base64 -d)
     [[ -n "${key}" ]] || fail "could not read the API key from agent-secret"
-    if k -n "${NS}" logs deployment/agent | grep -qF -f <(printf '%s\n' "${key}"); then
+    # Read the logs first, so a failed or empty read can't pass as "no key found". A here-string,
+    # not a pipe: grep stopping early can't make the check look clean.
+    logs=$(k -n "${NS}" logs deployment/agent) || fail "could not read the pod logs"
+    [[ -n "${logs}" ]] || fail "the pod logs are empty, nothing to check"
+    if grep -qF -f <(printf '%s\n' "${key}") <<<"${logs}"; then
       echo "FAIL: the API key appears in the pod logs" >&2
       exit 1
     fi

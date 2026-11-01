@@ -70,7 +70,7 @@ def test_patient_rejects_unknown_command(fake_tools):
 
 # --- patient.sh check, against fake tools (the cluster "exists", nothing real is called) -------
 
-FAKE_KEY_B64 = "ZmFrZS1rZXktMTIz"  # base64 of "fake-key-123"
+FAKE_KEY_B64 = "ZmFrZS1rZXktMTIz"  # base64 of "fake-key-123"  # gitleaks:allow (fake test value)
 
 
 def make_check_env(
@@ -79,6 +79,7 @@ def make_check_env(
     chat='{"reply":"echo: ping"}',
     curl_exit=0,
     logs="INFO: GET /health 200",
+    logs_exit=0,
 ):
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
@@ -89,7 +90,7 @@ def make_check_env(
         "kubectl": f"""case "$*" in
   *port-forward*) echo $$ > "{pid_file}"; exec sleep 30 ;;
   *"get secret"*) printf '%s' '{FAKE_KEY_B64}' ;;
-  *logs*) echo '{logs}' ;;
+  *logs*) printf '%s' '{logs}'; exit {logs_exit} ;;
 esac""",
         "curl": f"""case "$*" in
   */health*) printf '%s' '{health}' ;;
@@ -151,3 +152,17 @@ def test_patient_check_fails_when_key_in_logs(tmp_path):
     assert result.returncode == 1
     assert "API key appears in the pod logs" in result.stderr
     assert "fake-key-123" not in result.stdout + result.stderr
+
+
+def test_patient_check_fails_when_logs_unreadable(tmp_path):
+    env, _ = make_check_env(tmp_path, logs="error: pod not found", logs_exit=1)
+    result = run_patient(env, "check")
+    assert result.returncode == 1
+    assert "FAIL: could not read the pod logs" in result.stderr
+
+
+def test_patient_check_fails_when_logs_empty(tmp_path):
+    env, _ = make_check_env(tmp_path, logs="")
+    result = run_patient(env, "check")
+    assert result.returncode == 1
+    assert "FAIL: the pod logs are empty" in result.stderr
