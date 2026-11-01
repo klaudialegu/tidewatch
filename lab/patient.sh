@@ -61,17 +61,31 @@ case "$1" in
     ;;
   check)
     port=18080
-    k -n "${NS}" port-forward svc/agent "${port}:80" >/dev/null 2>&1 &
+    tries="${CHECK_WAIT_TRIES:-20}"
+    fail() { echo "FAIL: $1" >&2; exit 1; }
+    # kubectl itself runs in the background (not the k() function, which would background a
+    # subshell), so $! is kubectl's PID and the trap really stops it.
+    kubectl --context "${CONTEXT}" -n "${NS}" port-forward svc/agent "${port}:80" >/dev/null 2>&1 &
     pf=$!
     trap 'kill "${pf}" 2>/dev/null || true' EXIT
-    for _ in $(seq 1 20); do
-      curl -fsS "http://127.0.0.1:${port}/health" >/dev/null 2>&1 && break
+    ready=""
+    for _ in $(seq 1 "${tries}"); do
+      if curl -fsS "http://127.0.0.1:${port}/health" >/dev/null 2>&1; then ready=1; break; fi
       sleep 0.5
     done
-    echo "health: $(curl -fsS "http://127.0.0.1:${port}/health")"
-    echo "chat:   $(curl -fsS -X POST -H 'Content-Type: application/json' \
-      -d '{"message":"ping"}' "http://127.0.0.1:${port}/chat")"
+    [[ -n "${ready}" ]] || fail "/health did not answer on port ${port}"
+    # If our port-forward died (for example the port was already taken), the answers came from
+    # something else.
+    kill -0 "${pf}" 2>/dev/null || fail "port-forward exited (is port ${port} already in use?)"
+    health=$(curl -fsS "http://127.0.0.1:${port}/health") || fail "/health request failed"
+    [[ "${health}" == '{"status":"ok"}' ]] || fail "unexpected /health reply: ${health}"
+    echo "health: ${health}"
+    chat=$(curl -fsS -X POST -H 'Content-Type: application/json' \
+      -d '{"message":"ping"}' "http://127.0.0.1:${port}/chat") || fail "/chat request failed"
+    [[ "${chat}" == '{"reply":"echo: ping"}' ]] || fail "unexpected /chat reply: ${chat}"
+    echo "chat:   ${chat}"
     key=$(k -n "${NS}" get secret agent-secret -o jsonpath='{.data.API_KEY}' | base64 -d)
+    [[ -n "${key}" ]] || fail "could not read the API key from agent-secret"
     if k -n "${NS}" logs deployment/agent | grep -qF -f <(printf '%s\n' "${key}"); then
       echo "FAIL: the API key appears in the pod logs" >&2
       exit 1
