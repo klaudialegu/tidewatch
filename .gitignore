@@ -23,3 +23,6 @@ __pycache__/
 .ruff_cache/
 *.egg-info/
 dist/
+
+# Lab blind-mode history (which scenario is applied)
+lab/.scenario-state

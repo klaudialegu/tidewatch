@@ -1,0 +1,12 @@
+# Lab scenario: one change on top of the healthy base.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../k8s
+patches:
+  - target:
+      kind: Deployment
+      name: agent
+    patch: |-
+      - op: remove
+        path: /spec/template/spec/containers/0/env

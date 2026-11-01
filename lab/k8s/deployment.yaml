@@ -9,6 +9,9 @@ metadata:
     app: agent
 spec:
   replicas: 1
+  # Lab: replace the pod outright on each change, so there is only ever one pod to look at.
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: agent
