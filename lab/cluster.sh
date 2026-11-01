@@ -2,6 +2,8 @@
 # Create, delete or check the local kind cluster "tidewatch-lab".
 # Safety: this script only ever touches the tidewatch-lab cluster and passes
 # --context explicitly, so it never acts on whatever context is "current".
+# The cluster name lives only here (passed with --name), not in kind-config.yaml.
+# Note: "up" makes kind-tidewatch-lab your current kubectl context; "down" leaves none set.
 set -euo pipefail
 
 CLUSTER="tidewatch-lab"
@@ -33,9 +35,10 @@ case "$1" in
     if exists; then
       echo "${CLUSTER} already exists"
     else
-      kind create cluster --config "${CONFIG}" --wait 120s
+      kind create cluster --name "${CLUSTER}" --config "${CONFIG}" --wait 120s
     fi
     kubectl --context "${CONTEXT}" get nodes
+    echo "current kubectl context: $(kubectl config current-context 2>/dev/null || echo none)"
     ;;
   down)
     if exists; then
@@ -47,6 +50,7 @@ case "$1" in
   status)
     if exists; then
       kubectl --context "${CONTEXT}" get nodes
+      echo "current kubectl context: $(kubectl config current-context 2>/dev/null || echo none)"
     else
       echo "${CLUSTER} is not running (run: $0 up)"
       exit 1
