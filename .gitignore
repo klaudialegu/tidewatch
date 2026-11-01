@@ -1,0 +1,25 @@
+# Private: never committed (see CLAUDE.md, Privacy rules)
+CLAUDE.local.md
+.private-terms
+NEXT.md
+ROADMAP.md
+PARKING_LOT.md
+docs/LEARNING_LOG.md
+.env
+.env.*
+
+# Cluster access and outputs from real runs (lab fixtures live in tests/fixtures/, on purpose)
+*.kubeconfig
+.kube/
+/snapshot*.json
+/report*.json
+/bundles/
+
+# Python and tools
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+dist/

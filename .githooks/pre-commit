@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+# Blocks commits that mention a private term (scripts/check-private-terms.sh).
+exec "$(git rev-parse --show-toplevel)/scripts/check-private-terms.sh" staged
