@@ -1,0 +1,25 @@
+[project]
+name = "tidewatch-agent"
+version = "0.1.0"
+description = "Fake agent app for the Tidewatch lab (lab only, never a Tidewatch dependency)."
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.162.0",
+    "uvicorn>=0.54.0",
+]
+
+[project.scripts]
+tidewatch-agent = "tidewatch_agent:main"
+
+[build-system]
+requires = ["uv_build>=0.12.23,<0.13.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "httpx2>=2.16.0",
+    "pytest>=9.2.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
