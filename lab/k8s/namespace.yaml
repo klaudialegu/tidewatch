@@ -1,0 +1,5 @@
+# Namespace for the lab patient. lab/patient.sh down deletes it (lab only).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: demo
