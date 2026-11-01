@@ -1,0 +1,9 @@
+# kind cluster for the Tidewatch lab. Local only, throwaway, fake data.
+# The node image is pinned by digest (from the kind v0.33.0 release notes),
+# so every rebuild runs exactly the same Kubernetes.
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: tidewatch-lab
+nodes:
+  - role: control-plane
+    image: kindest/node:v1.37.0@sha256:a1ed56cfb0e7b93589bdf97c8cd566405a265939e3620fc4f5de89adff580ae5
