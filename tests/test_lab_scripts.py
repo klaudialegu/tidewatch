@@ -9,8 +9,10 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPTS = [ROOT / "lab" / "cluster.sh", ROOT / "lab" / "patient.sh"]
+SCRIPTS = [ROOT / "lab" / name for name in ("cluster.sh", "patient.sh", "scenario.sh")]
 PATIENT = ROOT / "lab" / "patient.sh"
+SCENARIO = ROOT / "lab" / "scenario.sh"
+SCENARIO_NAMES = ("bad-image", "no-key", "memory")
 
 
 @pytest.mark.parametrize("script", SCRIPTS, ids=lambda p: p.name)
@@ -166,3 +168,93 @@ def test_patient_check_fails_when_logs_empty(tmp_path):
     result = run_patient(env, "check")
     assert result.returncode == 1
     assert "FAIL: the pod logs are empty" in result.stderr
+
+
+# --- scenario.sh, against fake tools ---------------------------------------------------------
+
+
+def make_scenario_env(tmp_path, cluster_exists=True):
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    log = tmp_path / "calls.log"
+    clusters = "echo tidewatch-lab" if cluster_exists else ":"
+    tools = {
+        "kind": f'echo "kind $*" >> "{log}"\ncase "$*" in "get clusters") {clusters} ;; esac',
+        "kubectl": f'echo "kubectl $*" >> "{log}"',
+    }
+    for name, body in tools.items():
+        script = bin_dir / name
+        script.write_text(f"#!/bin/sh\n{body}\nexit 0\n")
+        script.chmod(0o755)
+    state = tmp_path / "scenario-state"
+    env = {"PATH": f"{bin_dir}:/usr/bin:/bin", "HOME": str(tmp_path), "SCENARIO_STATE": str(state)}
+    return env, log, state
+
+
+def run_scenario(env, *args):
+    return subprocess.run(["bash", str(SCENARIO), *args], env=env, capture_output=True, text=True)
+
+
+def calls(log):
+    return log.read_text().splitlines() if log.exists() else []
+
+
+def test_scenario_refuses_when_cluster_missing(tmp_path):
+    env, log, state = make_scenario_env(tmp_path, cluster_exists=False)
+    for args in (("apply", "no-key"), ("apply-random",), ("reset",)):
+        result = run_scenario(env, *args)
+        assert result.returncode == 1, args
+        assert "cluster tidewatch-lab does not exist" in result.stderr
+    assert not [c for c in calls(log) if c.startswith("kubectl")]
+    assert not state.exists()
+
+
+def test_scenario_rejects_unknown_name(tmp_path):
+    env, log, _ = make_scenario_env(tmp_path)
+    result = run_scenario(env, "apply", "bogus")
+    assert result.returncode == 2
+    assert "unknown scenario" in result.stderr
+    assert calls(log) == []
+
+
+def test_apply_random_hides_the_name_and_records_it(tmp_path):
+    env, log, state = make_scenario_env(tmp_path)
+    result = run_scenario(env, "apply-random")
+    assert result.returncode == 0, result.stderr
+    for name in SCENARIO_NAMES:
+        assert name not in result.stdout + result.stderr
+    picked = state.read_text().split()
+    assert len(picked) == 1 and picked[0] in SCENARIO_NAMES
+    applied = [c for c in calls(log) if " apply -k " in c]
+    assert len(applied) == 1
+    assert applied[0].startswith("kubectl --context kind-tidewatch-lab apply -k ")
+    assert applied[0].endswith(f"/lab/scenarios/{picked[0]}")
+
+
+def test_apply_random_does_not_repeat_until_round_restarts(tmp_path):
+    env, _, state = make_scenario_env(tmp_path)
+    for _ in SCENARIO_NAMES:
+        assert run_scenario(env, "apply-random").returncode == 0
+    assert sorted(state.read_text().split()) == sorted(SCENARIO_NAMES)
+    exhausted = run_scenario(env, "apply-random")
+    assert exhausted.returncode == 1
+    assert "every scenario has been used" in exhausted.stderr
+    assert run_scenario(env, "restart-round").returncode == 0
+    assert run_scenario(env, "apply-random").returncode == 0
+
+
+def test_reveal_names_the_current_scenario(tmp_path):
+    env, _, state = make_scenario_env(tmp_path)
+    assert "no scenario recorded" in run_scenario(env, "reveal").stdout
+    run_scenario(env, "apply", "memory")
+    assert run_scenario(env, "reveal").stdout.strip() == "current scenario: memory"
+
+
+def test_reset_applies_the_healthy_base_and_waits(tmp_path):
+    env, log, _ = make_scenario_env(tmp_path)
+    result = run_scenario(env, "reset")
+    assert result.returncode == 0, result.stderr
+    kubectl_calls = [c for c in calls(log) if c.startswith("kubectl")]
+    assert kubectl_calls[0].startswith("kubectl --context kind-tidewatch-lab apply -k ")
+    assert kubectl_calls[0].endswith("/lab/k8s")
+    assert "rollout status deployment/agent" in kubectl_calls[1]
