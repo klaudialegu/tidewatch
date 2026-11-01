@@ -100,6 +100,16 @@ class Repo:
         ).stdout
         return out.strip() != ""
 
+    def remote_sha(self, ref: str) -> str:
+        out = subprocess.run(
+            ["git", "ls-remote", str(self.remote), ref],
+            env=self.env,
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout
+        return out.split()[0] if out.strip() else ""
+
 
 @pytest.fixture
 def repo(tmp_path: Path) -> Repo:
@@ -237,6 +247,18 @@ def test_push_blocked_term_only_in_commit_message(repo):
     assert not repo.remote_has("refs/heads/feature-message")
 
 
+def test_push_blocked_term_in_new_commit_on_existing_branch(repo):
+    # The everyday push: the branch is already on the remote and gets one more commit.
+    repo.git("switch", "-q", "-c", "feature-update")
+    repo.commit_file("notes.txt", "clean\n")
+    assert repo.push("feature-update").returncode == 0
+    pushed = repo.remote_sha("refs/heads/feature-update")
+    repo.commit_file("more.txt", f"hello {TERM}\n")
+    repo.enable_hooks()
+    assert_blocked(repo.push("feature-update"), "Commit ")
+    assert repo.remote_sha("refs/heads/feature-update") == pushed
+
+
 # --- allowed ---------------------------------------------------------------------------------
 
 
@@ -272,6 +294,16 @@ def test_push_allowed_clean_tag(repo):
     result = repo.push("refs/tags/v1")
     assert result.returncode == 0, result.stderr
     assert repo.remote_has("refs/tags/v1")
+
+
+def test_push_allowed_delete_remote_branch(repo):
+    repo.enable_hooks()
+    repo.git("switch", "-q", "-c", "feature-gone")
+    assert repo.commit_file("notes.txt", "clean\n").returncode == 0
+    assert repo.push("feature-gone").returncode == 0
+    result = repo.push(":feature-gone")
+    assert result.returncode == 0, result.stderr
+    assert not repo.remote_has("refs/heads/feature-gone")
 
 
 # --- find ------------------------------------------------------------------------------------
