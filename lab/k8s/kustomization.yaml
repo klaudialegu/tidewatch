@@ -1,0 +1,8 @@
+# The healthy patient as one kustomize base. Each lab scenario (lab/scenarios/*) layers exactly one
+# change on top of it; `lab/scenario.sh reset` re-applies this base.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - namespace.yaml
+  - deployment.yaml
+  - service.yaml

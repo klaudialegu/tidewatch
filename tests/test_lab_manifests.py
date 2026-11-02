@@ -80,7 +80,8 @@ def test_deployment_image_tag_is_pinned():
 
 
 def test_all_manifests_target_namespace_demo():
-    docs = [doc for path in sorted((LAB / "k8s").glob("*.yaml")) for doc in load_docs(path)]
+    paths = [p for p in sorted((LAB / "k8s").glob("*.yaml")) if p.name != "kustomization.yaml"]
+    docs = [doc for path in paths for doc in load_docs(path)]
     assert {doc["kind"] for doc in docs} >= {"Namespace", "Deployment", "Service"}
     for doc in docs:
         if doc["kind"] == "Namespace":

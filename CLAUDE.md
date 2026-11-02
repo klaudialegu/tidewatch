@@ -62,7 +62,7 @@ It is built with Claude Code as a pair programmer, in small reviewed slices, aga
 - Prove the guard tests can fail against a broken copy (never edit the real guard): `TIDEWATCH_GUARD_SCRIPT=<copy> uv run pytest tests/test_private_terms_guard.py`
 - Lab cluster (kind, pinned node image in lab/kind-config.yaml): `lab/cluster.sh up|down|status`
 - Lab patient (fake agent in namespace demo, ADR 0002): `lab/patient.sh up|status|check|down`. Its tests: `cd lab/agent && uv run pytest`
-- (More commands arrive with the code: lab scenario apply/reset.)
+- Lab scenarios (break the patient on purpose): `lab/scenario.sh list | apply <name> | apply-random | reveal | reset | restart-round`. `apply-random` is blind mode: it doesn't say which scenario it applied.
 
 ## Map
 - docs/PLAN.md: what, why, stack, safety, roadmap. docs/decisions/: ADRs.
