@@ -43,7 +43,19 @@ def test_snapshot_json_round_trip_keeps_everything():
 def test_snapshot_has_schema_version_and_no_secret_fields():
     snap = Snapshot(collected_at=T0, context=None, namespace="demo")
     assert snap.model_dump()["schema_version"] == SCHEMA_VERSION == "1"
+    import inspect
+
+    from pydantic import BaseModel
+
+    import tidewatch.snapshot as module
+
+    models = [
+        m
+        for _, m in inspect.getmembers(module, inspect.isclass)
+        if issubclass(m, BaseModel) and m.__module__ == module.__name__
+    ]
+    assert len(models) >= 7  # every model in the module, including ContainerSpec and Deployment
     field_names = set()
-    for model in (Snapshot, Pod, ContainerStatus, ContainerState, Event):
+    for model in models:
         field_names |= set(model.model_fields)
     assert not field_names & {"env", "secrets", "data", "value", "string_data"}
