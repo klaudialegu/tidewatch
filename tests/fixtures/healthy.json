@@ -1,0 +1,110 @@
+{
+  "schema_version": "1",
+  "collected_at": "2026-11-02T00:21:31.532698Z",
+  "context": "kind-tidewatch-lab",
+  "namespace": "demo",
+  "pods": [
+    {
+      "name": "agent-667f98c558-xzpv6",
+      "phase": "Running",
+      "owner": "ReplicaSet/agent-667f98c558",
+      "conditions": {
+        "PodReadyToStartContainers": "True",
+        "Initialized": "True",
+        "Ready": "True",
+        "ContainersReady": "True",
+        "PodScheduled": "True"
+      },
+      "containers": [
+        {
+          "name": "agent",
+          "image": "docker.io/library/tidewatch-agent:0.1.0",
+          "ready": true,
+          "restart_count": 0,
+          "state": {
+            "state": "running",
+            "reason": null,
+            "message": null,
+            "exit_code": null
+          },
+          "last_state": null,
+          "previous_logs": []
+        }
+      ]
+    }
+  ],
+  "deployments": [
+    {
+      "name": "agent",
+      "replicas": 1,
+      "ready_replicas": 1,
+      "available_replicas": 1,
+      "containers": [
+        {
+          "name": "agent",
+          "image": "tidewatch-agent:0.1.0",
+          "memory_request": "64Mi",
+          "memory_limit": "128Mi",
+          "cpu_request": "50m",
+          "cpu_limit": "250m"
+        }
+      ]
+    }
+  ],
+  "events": [
+    {
+      "type": "Normal",
+      "reason": "ScalingReplicaSet",
+      "object": "Deployment/agent",
+      "message": "Scaled up replica set agent-667f98c558 from 0 to 1",
+      "count": 1,
+      "first_seen": "2026-11-02T00:20:25Z",
+      "last_seen": "2026-11-02T00:20:25Z"
+    },
+    {
+      "type": "Normal",
+      "reason": "Scheduled",
+      "object": "Pod/agent-667f98c558-xzpv6",
+      "message": "Successfully assigned demo/agent-667f98c558-xzpv6 to tidewatch-lab-control-plane",
+      "count": 1,
+      "first_seen": "2026-11-02T00:20:25Z",
+      "last_seen": "2026-11-02T00:20:25Z"
+    },
+    {
+      "type": "Normal",
+      "reason": "Pulled",
+      "object": "Pod/agent-667f98c558-xzpv6",
+      "message": "Container image \"tidewatch-agent:0.1.0\" already present on machine and can be accessed by the pod",
+      "count": 1,
+      "first_seen": "2026-11-02T00:20:25Z",
+      "last_seen": "2026-11-02T00:20:25Z"
+    },
+    {
+      "type": "Normal",
+      "reason": "Created",
+      "object": "Pod/agent-667f98c558-xzpv6",
+      "message": "Container created",
+      "count": 1,
+      "first_seen": "2026-11-02T00:20:25Z",
+      "last_seen": "2026-11-02T00:20:25Z"
+    },
+    {
+      "type": "Normal",
+      "reason": "Started",
+      "object": "Pod/agent-667f98c558-xzpv6",
+      "message": "Container started",
+      "count": 1,
+      "first_seen": "2026-11-02T00:20:25Z",
+      "last_seen": "2026-11-02T00:20:25Z"
+    },
+    {
+      "type": "Normal",
+      "reason": "SuccessfulCreate",
+      "object": "ReplicaSet/agent-667f98c558",
+      "message": "Created pod: agent-667f98c558-xzpv6",
+      "count": 1,
+      "first_seen": "2026-11-02T00:20:25Z",
+      "last_seen": "2026-11-02T00:20:25Z"
+    }
+  ]
+}
