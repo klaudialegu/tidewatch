@@ -274,3 +274,77 @@ def test_scenario_refuses_when_patient_not_deployed(tmp_path):
         assert "the patient is not deployed" in result.stderr
     assert not [c for c in calls(log) if " apply " in c or "rollout" in c]
     assert not state.exists()
+
+
+# --- capture-fixtures.sh, against fake tools and fake lab scripts ----------------------------
+
+CAPTURE = ROOT / "lab" / "capture-fixtures.sh"
+
+
+def make_capture_env(tmp_path, cluster_exists=True, leak_key=False):
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    log = tmp_path / "calls.log"
+    out = tmp_path / "fixtures"
+    clusters = "echo tidewatch-lab" if cluster_exists else ":"
+    body = "fake-key-123" if leak_key else "clean"
+    scripts = {
+        bin_dir
+        / "kind": f'echo "kind $*" >> "{log}"\ncase "$*" in "get clusters") {clusters} ;; esac',
+        bin_dir / "kubectl": f'echo "kubectl $*" >> "{log}"\nprintf %s {FAKE_KEY_B64}',
+        # fake `uv run ... -o FILE`: write FILE (last argument)
+        bin_dir / "uv": f'echo "uv $*" >> "{log}"\nfor a; do f="$a"; done\necho "{body}" > "$f"',
+        tmp_path / "patient.sh": f'echo "patient $*" >> "{log}"',
+        tmp_path / "scenario.sh": f'echo "scenario $*" >> "{log}"\n[ "$1" = list ] && echo no-key',
+    }
+    for path, text in scripts.items():
+        path.write_text(f"#!/bin/sh\n{text}\nexit 0\n")
+        path.chmod(0o755)
+    env = {
+        "PATH": f"{bin_dir}:/usr/bin:/bin",
+        "HOME": str(tmp_path),
+        "CAPTURE_OUT": str(out),
+        "CAPTURE_PATIENT": str(tmp_path / "patient.sh"),
+        "CAPTURE_SCENARIO": str(tmp_path / "scenario.sh"),
+        "CAPTURE_WAIT_SECONDS": "0",
+    }
+    return env, log, out
+
+
+def run_capture(env, *args):
+    return subprocess.run(["bash", str(CAPTURE), *args], env=env, capture_output=True, text=True)
+
+
+def test_capture_refuses_when_cluster_missing(tmp_path):
+    env, log, out = make_capture_env(tmp_path, cluster_exists=False)
+    result = run_capture(env)
+    assert result.returncode == 1
+    assert "cluster tidewatch-lab does not exist" in result.stderr
+    assert [c for c in calls(log) if not c.startswith("kind ")] == []
+    assert not out.exists()
+
+
+def test_capture_deletes_a_fixture_that_contains_the_lab_key(tmp_path):
+    env, _, out = make_capture_env(tmp_path, leak_key=True)
+    result = run_capture(env, "healthy")
+    assert result.returncode == 1
+    assert "contained the lab API key; deleted it" in result.stderr
+    assert not (out / "healthy.json").exists()
+    assert "fake-key-123" not in result.stdout + result.stderr
+
+
+def test_capture_writes_clean_fixtures_and_ends_healthy(tmp_path):
+    env, log, out = make_capture_env(tmp_path)
+    result = run_capture(env)
+    assert result.returncode == 0, result.stderr
+    assert sorted(p.name for p in out.iterdir()) == ["healthy.json", "no-key.json"]
+    lab_calls = [c for c in calls(log) if c.startswith(("patient", "scenario apply"))]
+    assert lab_calls == [
+        "patient down",
+        "patient up",
+        "patient down",
+        "patient up",
+        "scenario apply no-key",
+        "patient down",
+        "patient up",
+    ]

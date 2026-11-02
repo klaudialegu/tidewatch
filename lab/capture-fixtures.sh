@@ -12,7 +12,10 @@ CLUSTER="tidewatch-lab"
 CONTEXT="kind-${CLUSTER}"
 NS="demo"
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-OUT="${HERE}/../tests/fixtures"
+# Overridable for tests (tests/test_lab_scripts.py); defaults are the real lab scripts.
+OUT="${CAPTURE_OUT:-${HERE}/../tests/fixtures}"
+PATIENT="${CAPTURE_PATIENT:-${HERE}/patient.sh}"
+SCENARIO="${CAPTURE_SCENARIO:-${HERE}/scenario.sh}"
 WAIT="${CAPTURE_WAIT_SECONDS:-60}"
 
 if ! kind get clusters 2>/dev/null | grep -qx "${CLUSTER}"; then
@@ -21,17 +24,17 @@ if ! kind get clusters 2>/dev/null | grep -qx "${CLUSTER}"; then
 fi
 
 names=("$@")
-[[ ${#names[@]} -gt 0 ]] || names=(healthy $("${HERE}/scenario.sh" list))
+[[ ${#names[@]} -gt 0 ]] || names=(healthy $("${SCENARIO}" list))
 mkdir -p "${OUT}"
 state="$(mktemp)"  # keep blind-mode history out of this
 trap 'rm -f "${state}"' EXIT
 
 for name in "${names[@]}"; do
   echo "== ${name}"
-  "${HERE}/patient.sh" down >/dev/null 2>&1 || { echo "error: patient.sh down failed" >&2; exit 1; }
-  "${HERE}/patient.sh" up >/dev/null 2>&1 || { echo "error: patient.sh up failed" >&2; exit 1; }
+  "${PATIENT}" down >/dev/null 2>&1 || { echo "error: patient.sh down failed" >&2; exit 1; }
+  "${PATIENT}" up >/dev/null 2>&1 || { echo "error: patient.sh up failed" >&2; exit 1; }
   if [[ "${name}" != "healthy" ]]; then
-    SCENARIO_STATE="${state}" "${HERE}/scenario.sh" apply "${name}" >/dev/null
+    SCENARIO_STATE="${state}" "${SCENARIO}" apply "${name}" >/dev/null
   fi
   sleep "${WAIT}"
   file="${OUT}/${name}.json"
@@ -45,6 +48,6 @@ for name in "${names[@]}"; do
 done
 
 echo "== back to healthy"
-"${HERE}/patient.sh" down >/dev/null 2>&1 || { echo "error: patient.sh down failed" >&2; exit 1; }
-"${HERE}/patient.sh" up >/dev/null 2>&1 || { echo "error: patient.sh up failed" >&2; exit 1; }
+"${PATIENT}" down >/dev/null 2>&1 || { echo "error: patient.sh down failed" >&2; exit 1; }
+"${PATIENT}" up >/dev/null 2>&1 || { echo "error: patient.sh up failed" >&2; exit 1; }
 echo "done: ${names[*]}"
