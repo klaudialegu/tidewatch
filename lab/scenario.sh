@@ -6,7 +6,7 @@
 #   lab/scenario.sh list            the scenario names
 #   lab/scenario.sh apply <name>    apply one scenario by name
 #   lab/scenario.sh apply-random    blind mode: apply one you haven't done yet, without naming it
-#   lab/scenario.sh reveal          name the scenario that is currently applied
+#   lab/scenario.sh reveal          name the scenario that is currently applied (none after a reset)
 #   lab/scenario.sh reset           back to the healthy patient (does not clear blind-mode history)
 #   lab/scenario.sh restart-round   clear blind-mode history, so every scenario is "new" again
 set -euo pipefail
@@ -44,7 +44,14 @@ case "${cmd}" in
   list) [[ $# -eq 1 ]] || usage; printf '%s\n' "${SCENARIOS[@]}"; exit 0 ;;
   reveal)
     [[ $# -eq 1 ]] || usage
-    if [[ -s "${STATE}" ]]; then echo "current scenario: $(tail -n 1 "${STATE}")"; else echo "no scenario recorded"; fi
+    last="$(tail -n 1 "${STATE}" 2>/dev/null || true)"
+    if [[ -z "${last}" ]]; then
+      echo "no scenario recorded"
+    elif [[ "${last}" == "reset" ]]; then
+      echo "no scenario applied (patient was reset to healthy)"
+    else
+      echo "current scenario: ${last}"
+    fi
     exit 0
     ;;
   restart-round) [[ $# -eq 1 ]] || usage; rm -f "${STATE}"; echo "blind-mode history cleared"; exit 0 ;;
@@ -57,6 +64,11 @@ need kind
 need kubectl
 if ! kind get clusters 2>/dev/null | grep -qx "${CLUSTER}"; then
   echo "error: cluster ${CLUSTER} does not exist (run: lab/cluster.sh up). Nothing was changed." >&2
+  exit 1
+fi
+# The scenarios assume the patient as lab/patient.sh up leaves it (image loaded, Secret created).
+if ! k -n "${NS}" get deployment/agent secret/agent-secret >/dev/null 2>&1; then
+  echo "error: the patient is not deployed (run: lab/patient.sh up first). Nothing was changed." >&2
   exit 1
 fi
 
@@ -88,6 +100,7 @@ case "${cmd}" in
   reset)
     k apply -k "${HERE}/k8s" >/dev/null
     k -n "${NS}" rollout status deployment/agent --timeout=120s
+    echo "reset" >> "${STATE}"
     echo "patient reset to healthy"
     ;;
 esac

@@ -173,14 +173,15 @@ def test_patient_check_fails_when_logs_empty(tmp_path):
 # --- scenario.sh, against fake tools ---------------------------------------------------------
 
 
-def make_scenario_env(tmp_path, cluster_exists=True):
+def make_scenario_env(tmp_path, cluster_exists=True, patient_deployed=True):
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
     log = tmp_path / "calls.log"
     clusters = "echo tidewatch-lab" if cluster_exists else ":"
     tools = {
         "kind": f'echo "kind $*" >> "{log}"\ncase "$*" in "get clusters") {clusters} ;; esac',
-        "kubectl": f'echo "kubectl $*" >> "{log}"',
+        "kubectl": f'echo "kubectl $*" >> "{log}"'
+        + ("" if patient_deployed else '\ncase "$*" in *" get "*) exit 1 ;; esac'),
     }
     for name, body in tools.items():
         script = bin_dir / name
@@ -248,13 +249,25 @@ def test_reveal_names_the_current_scenario(tmp_path):
     assert "no scenario recorded" in run_scenario(env, "reveal").stdout
     run_scenario(env, "apply", "memory")
     assert run_scenario(env, "reveal").stdout.strip() == "current scenario: memory"
+    run_scenario(env, "reset")
+    assert "no scenario applied" in run_scenario(env, "reveal").stdout
 
 
 def test_reset_applies_the_healthy_base_and_waits(tmp_path):
     env, log, _ = make_scenario_env(tmp_path)
     result = run_scenario(env, "reset")
     assert result.returncode == 0, result.stderr
-    kubectl_calls = [c for c in calls(log) if c.startswith("kubectl")]
+    kubectl_calls = [c for c in calls(log) if c.startswith("kubectl") and " get " not in c]
     assert kubectl_calls[0].startswith("kubectl --context kind-tidewatch-lab apply -k ")
     assert kubectl_calls[0].endswith("/lab/k8s")
     assert "rollout status deployment/agent" in kubectl_calls[1]
+
+
+def test_scenario_refuses_when_patient_not_deployed(tmp_path):
+    env, log, state = make_scenario_env(tmp_path, patient_deployed=False)
+    for args in (("apply", "no-key"), ("apply-random",), ("reset",)):
+        result = run_scenario(env, *args)
+        assert result.returncode == 1, args
+        assert "the patient is not deployed" in result.stderr
+    assert not [c for c in calls(log) if " apply " in c or "rollout" in c]
+    assert not state.exists()
