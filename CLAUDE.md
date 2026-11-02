@@ -22,6 +22,7 @@ It is built with Claude Code as a pair programmer, in small reviewed slices, aga
 - You do all installs, code and commands. Stop for me only for: my password or a GUI step (like Docker Desktop's first launch), 🔴 decisions, and Block 3's investigation.
 - Explain each new Kubernetes or Docker concept with a one-line analogy the first time, and log it with /learn.
 - **Block 3 exception (diagnosis practice):** build the lab scenarios, but don't diagnose them. Apply one, then coach me through `kubectl get pods`, `describe`, `logs --previous` and `get events`, one at a time: I run each command and say what I see; give hints, not answers. Then I write 2–3 sentences per failure in lab/NOTES.md, in my own words.
+- Before coaching a scenario, rebuild namespace demo so its events are clean, and first check I know the pod lifecycle (Scheduled → Pulling → Started → Ready); never show scenario contents in visible output.
 - One slice at a time; a slice is the smallest change that can be verified (tests, or seen working against the lab cluster).
 - Plan before code for anything touching more than 2 files.
 - Verify your own work: run the tests, and for cluster work run the command against tidewatch-lab before saying done.
