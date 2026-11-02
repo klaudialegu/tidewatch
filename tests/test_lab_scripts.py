@@ -9,7 +9,10 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPTS = [ROOT / "lab" / name for name in ("cluster.sh", "patient.sh", "scenario.sh")]
+SCRIPTS = [
+    ROOT / "lab" / name
+    for name in ("cluster.sh", "patient.sh", "scenario.sh", "capture-fixtures.sh")
+]
 PATIENT = ROOT / "lab" / "patient.sh"
 SCENARIO = ROOT / "lab" / "scenario.sh"
 SCENARIO_NAMES = ("bad-image", "no-key", "memory")
