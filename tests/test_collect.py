@@ -1,5 +1,6 @@
 from datetime import timedelta
 
+import pytest
 from fakes import (
     ALLOWED,
     ALLOWED_APPS,
@@ -12,8 +13,9 @@ from fakes import (
     pod,
     state,
 )
+from kubernetes.client.exceptions import ApiException
 
-from tidewatch.collect import LOG_LINES, collect
+from tidewatch.collect import LOG_LINES, NamespaceNotFound, collect
 from tidewatch.snapshot import SCHEMA_VERSION
 
 
@@ -115,3 +117,19 @@ def test_event_falls_back_to_event_time_and_sorts_by_last_seen():
     snap = collect(FakeCore(events=[late, early]), FakeApps(), "demo", now=T0)
     assert [e.reason for e in snap.events] == ["Early", "Late"]
     assert snap.events[0].first_seen == T0 and snap.events[0].last_seen == T0
+
+
+def test_collect_fails_when_namespace_missing():
+    core = FakeCore(pods=[pod()], namespaces=("demo",))
+    with pytest.raises(NamespaceNotFound):
+        collect(core, FakeApps(), "demoo", now=T0)
+    assert [c[0] for c in core.calls] == ["read_namespace"]  # stopped before listing anything
+
+
+def test_collect_passes_other_api_errors_through():
+    class Forbidden(FakeCore):
+        def read_namespace(self, name):
+            raise ApiException(status=403, reason="Forbidden")
+
+    with pytest.raises(ApiException):
+        collect(Forbidden(), FakeApps(), "demo", now=T0)

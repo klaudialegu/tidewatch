@@ -16,6 +16,10 @@ from tidewatch.snapshot import (
 LOG_LINES = 20
 
 
+class NamespaceNotFound(Exception):
+    """The namespace doesn't exist (a typo must not look like an empty, healthy namespace)."""
+
+
 def load_clients(context: str | None = None) -> tuple[Any, Any, str | None]:
     """Return (CoreV1Api, AppsV1Api, context name) from the local kubeconfig."""
     from kubernetes import client, config
@@ -130,6 +134,14 @@ def collect(
     context: str | None = None,
     now: datetime | None = None,
 ) -> Snapshot:
+    from kubernetes.client.exceptions import ApiException
+
+    try:
+        core.read_namespace(namespace)
+    except ApiException as exc:
+        if exc.status == 404:
+            raise NamespaceNotFound(namespace) from None
+        raise
     pods = core.list_namespaced_pod(namespace).items
     deployments = apps.list_namespaced_deployment(namespace).items
     events = core.list_namespaced_event(namespace).items

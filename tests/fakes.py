@@ -3,7 +3,12 @@
 from datetime import UTC, datetime
 from types import SimpleNamespace as NS
 
-ALLOWED = {"list_namespaced_pod", "list_namespaced_event", "read_namespaced_pod_log"}
+ALLOWED = {
+    "read_namespace",
+    "list_namespaced_pod",
+    "list_namespaced_event",
+    "read_namespaced_pod_log",
+}
 ALLOWED_APPS = {"list_namespaced_deployment"}
 T0 = datetime(2026, 11, 1, 12, 0, tzinfo=UTC)
 
@@ -75,10 +80,19 @@ def event(reason="Scheduled", kind="Pod", name="agent-abc", typ="Normal", count=
 class FakeCore:
     """Only the allowed read calls exist; anything else fails the test loudly."""
 
-    def __init__(self, pods=(), events=(), logs=None, log_error=None):
+    def __init__(self, pods=(), events=(), logs=None, log_error=None, namespaces=("demo",)):
         self._pods, self._events = list(pods), list(events)
         self._logs, self._log_error = logs, log_error
+        self._namespaces = set(namespaces)
         self.calls = []
+
+    def read_namespace(self, name):
+        from kubernetes.client.exceptions import ApiException
+
+        self.calls.append(("read_namespace", name))
+        if name not in self._namespaces:
+            raise ApiException(status=404, reason="Not Found")
+        return NS(metadata=NS(name=name))
 
     def list_namespaced_pod(self, namespace):
         self.calls.append(("list_namespaced_pod", namespace))

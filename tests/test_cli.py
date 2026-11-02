@@ -50,3 +50,11 @@ def test_collect_reports_cluster_error_cleanly(monkeypatch):
     assert result.exit_code == 1
     assert "could not collect from the cluster: no such context" in result.stderr
     assert "Traceback" not in result.output
+
+
+def test_collect_reports_missing_namespace(monkeypatch):
+    _fake_clients(monkeypatch)
+    result = CliRunner().invoke(app, ["collect", "-n", "demoo"])
+    assert result.exit_code == 1
+    assert "namespace 'demoo' not found in kind-test" in result.stderr
+    assert result.stdout == ""
