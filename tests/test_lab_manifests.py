@@ -96,3 +96,25 @@ def test_no_secret_manifest_committed():
             continue
         for doc in load_docs(path):
             assert doc.get("kind") != "Secret", path
+
+
+def test_model_deployment_is_pinned_non_root_with_limits_and_probes():
+    docs = {d["kind"]: d for d in load_docs(LAB / "k8s" / "model.yaml")}
+    deploy = docs["Deployment"]
+    pod_spec = deploy["spec"]["template"]["spec"]
+    (c,) = pod_spec["containers"]
+    assert c["image"] == agent_container()["image"]  # same pinned lab image as the agent
+    assert c["command"] == ["/app/.venv/bin/tidewatch-model"]
+    assert pod_spec["securityContext"]["runAsNonRoot"] is True
+    assert pod_spec["securityContext"]["runAsUser"] == dockerfile_uid()
+    assert c["resources"]["limits"]["memory"] and c["resources"]["requests"]["memory"]
+    for probe in ("readinessProbe", "livenessProbe"):
+        assert c[probe]["httpGet"]["path"] == "/health"
+    assert c["env"][0] == {"name": "MODEL_MODE", "value": "ok"}
+    assert docs["Service"]["spec"]["selector"] == {"app": "model"}
+
+
+def test_agent_points_at_the_in_cluster_model():
+    env = {e["name"]: e for e in agent_container()["env"]}
+    assert env["MODEL_URL"]["value"] == "http://model/v1/chat"
+    assert agent_container()["env"][0]["name"] == "API_KEY"  # no-key removes exactly env/0

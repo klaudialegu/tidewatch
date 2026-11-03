@@ -15,7 +15,14 @@ SCRIPTS = [
 ]
 PATIENT = ROOT / "lab" / "patient.sh"
 SCENARIO = ROOT / "lab" / "scenario.sh"
-SCENARIO_NAMES = ("bad-image", "no-key", "memory")
+SCENARIO_NAMES = (
+    "bad-image",
+    "no-key",
+    "memory",
+    "llm-bad-key",
+    "llm-rate-limit",
+    "llm-timeout",
+)
 
 
 @pytest.mark.parametrize("script", SCRIPTS, ids=lambda p: p.name)
@@ -81,7 +88,7 @@ FAKE_KEY_B64 = "ZmFrZS1rZXktMTIz"  # base64 of "fake-key-123"  # gitleaks:allow 
 def make_check_env(
     tmp_path,
     health='{"status":"ok"}',
-    chat='{"reply":"echo: ping"}',
+    chat='{"reply":"model: ping"}',
     curl_exit=0,
     logs="INFO: GET /health 200",
     logs_exit=0,
@@ -263,7 +270,18 @@ def test_reset_applies_the_healthy_base_and_waits(tmp_path):
     kubectl_calls = [c for c in calls(log) if c.startswith("kubectl") and " get " not in c]
     assert kubectl_calls[0].startswith("kubectl --context kind-tidewatch-lab apply -k ")
     assert kubectl_calls[0].endswith("/lab/k8s")
-    assert "rollout status deployment/agent" in kubectl_calls[1]
+    assert any("rollout status deployment/agent" in c for c in kubectl_calls)
+
+
+def test_reset_waits_for_agent_and_model(tmp_path):
+    env, log, _ = make_scenario_env(tmp_path)
+    assert run_scenario(env, "reset").returncode == 0
+    steps = [c.split(" -n demo ", 1)[-1] for c in calls(log) if " -n demo rollout " in c]
+    assert steps == [
+        "rollout restart deployment/agent",
+        "rollout status deployment/model --timeout=120s",
+        "rollout status deployment/agent --timeout=120s",
+    ]
 
 
 def test_scenario_refuses_when_patient_not_deployed(tmp_path):
@@ -347,4 +365,38 @@ def test_capture_writes_clean_fixtures_and_ends_healthy(tmp_path):
         "scenario apply no-key",
         "patient down",
         "patient up",
+    ]
+
+
+def test_patient_up_applies_the_kustomization_and_waits_for_both_rollouts(tmp_path):
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    log = tmp_path / "calls.log"
+    tools = {
+        "docker": "exit 0",
+        "kind": 'case "$*" in "get clusters") echo tidewatch-lab ;; esac',
+        "kubectl": "exit 0",  # `get secret` succeeds, so no secret is created
+        "openssl": "echo 00",
+    }
+    for name, body in tools.items():
+        script = bin_dir / name
+        script.write_text(f'#!/bin/sh\necho "{name} $*" >> "{log}"\n{body}\n')
+        script.chmod(0o755)
+    env = {"PATH": f"{bin_dir}:/usr/bin:/bin", "HOME": str(tmp_path)}
+    result = run_patient(env, "up")
+    assert result.returncode == 0, result.stderr
+    kubectl_calls = [
+        c.removeprefix("kubectl --context kind-tidewatch-lab ")
+        for c in calls(log)
+        if c.startswith("kubectl")
+    ]
+    applies = [c for c in kubectl_calls if c.startswith("apply")]
+    assert applies[-1].startswith("apply -k ") and applies[-1].endswith("/lab/k8s")
+    rollouts = [c for c in kubectl_calls if "rollout status" in c]
+    assert rollouts == [
+        "-n demo rollout status deployment/model --timeout=120s",
+        "-n demo rollout status deployment/agent --timeout=120s",
+    ]
+    assert [c for c in calls(log) if c.startswith("kind load")] == [
+        "kind load docker-image tidewatch-agent:0.2.0 --name tidewatch-lab"
     ]

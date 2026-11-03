@@ -95,3 +95,19 @@ core.list_namespaced_secret("demo")
     found = violations(sample)
     assert len(found) == 10, found
     assert violations('core.list_namespaced_pod("demo")\n"a".replace("a", "b")\n') == []
+
+
+def test_every_pod_log_read_is_bounded_by_lines_and_time():
+    reads = []
+    for path in sources():
+        for node in ast.walk(ast.parse(path.read_text())):
+            if (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and node.func.attr == "read_namespaced_pod_log"
+            ):
+                reads.append((path.name, node.lineno, {k.arg for k in node.keywords}))
+    assert reads, "expected at least one log read"
+    for name, line, keywords in reads:
+        assert {"tail_lines", "since_seconds"} <= keywords, f"{name}:{line} unbounded log read"
+        assert "follow" not in keywords, f"{name}:{line} follows logs"
