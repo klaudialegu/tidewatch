@@ -1,5 +1,6 @@
 """Findings and the report: Tidewatch's versioned output contract (ADR 0003)."""
 
+import re
 from datetime import datetime
 from typing import Literal
 
@@ -10,6 +11,24 @@ Severity = Literal["critical", "warning", "info"]
 SEVERITY_RANK: dict[str, int] = {"critical": 0, "warning": 1, "info": 2}
 MAX_EVIDENCE = 5
 MAX_LOG_LINES = 3
+
+# Key-like tokens in log lines (provider errors often echo part of a key). Masked in every
+# log_excerpt, for every rule. This is a guard rail, not redaction (see ADR 0003/0004).
+_MASKS = [
+    (re.compile(r"\b(sk|pk|rk)-[A-Za-z0-9_\-]{6,}"), r"\1-***"),
+    (re.compile(r"\b(Bearer)\s+\S+", re.IGNORECASE), r"\1 ***"),
+    (
+        re.compile(r"\b(api[_-]?key|token|secret|password)(\s*[=:]\s*)\S+", re.IGNORECASE),
+        r"\1\2***",
+    ),
+    (re.compile(r"[A-Za-z0-9_\-+/=]{24,}"), "***"),
+]
+
+
+def mask_secrets(line: str) -> str:
+    for pattern, replacement in _MASKS:
+        line = pattern.sub(replacement, line)
+    return line
 
 
 class Finding(BaseModel):
@@ -39,7 +58,7 @@ class Finding(BaseModel):
     @field_validator("log_excerpt")
     @classmethod
     def _cap_logs(cls, value: list[str]) -> list[str]:
-        return value[:MAX_LOG_LINES]
+        return [mask_secrets(line) for line in value[:MAX_LOG_LINES]]
 
 
 class Report(BaseModel):

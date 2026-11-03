@@ -318,3 +318,26 @@ def test_invalid_selector_prints_only_the_api_reason(monkeypatch):
             "error: invalid --selector 'bad!!': "
             "unable to parse requirement: found '!', expected: ','"
         )
+
+
+def test_scan_from_rejects_live_only_flags(monkeypatch):
+    _no_cluster(monkeypatch)
+    snap = str(FIXTURES / "healthy.json")
+    for extra in (
+        ["-l", "app=agent"],
+        ["--log-lines", "3"],
+        ["--log-since-minutes", "5"],
+        ["--context", "kind-tidewatch-lab"],
+    ):
+        result = CliRunner().invoke(app, ["scan", "--from", snap, *extra])
+        assert result.exit_code == 1, extra
+        flag = "--selector" if extra[0] == "-l" else extra[0]
+        assert f"{flag} applies only to a live scan" in result.stderr
+
+
+def test_scan_from_names_every_live_only_flag_given(monkeypatch):
+    _no_cluster(monkeypatch)
+    args = ["scan", "--from", str(FIXTURES / "healthy.json"), "-l", "app=x", "--log-lines", "3"]
+    result = CliRunner().invoke(app, args)
+    assert result.exit_code == 1
+    assert "--selector, --log-lines apply only to a live scan" in result.stderr

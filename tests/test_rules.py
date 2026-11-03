@@ -106,7 +106,7 @@ def test_exits_on_start_rule_prefers_error_log_lines():
             )
         ]
     )
-    assert run(container_exits_on_start, no_errors)[0].log_excerpt == ["b", "c", "d"]
+    assert run(container_exits_on_start, no_errors)[0].log_excerpt == []  # matched lines only
 
 
 def test_exits_on_start_rule_ignores_oom_and_zero_exit():
@@ -218,3 +218,146 @@ def test_rules_ignore_a_healthy_running_container():
     snap_kwargs = {"deployments": [mkdeployment()]}
     for fn in ALL_RULES:
         assert run(fn, pod, **snap_kwargs) == [], fn.__name__
+
+
+# --- LLM provider rules ----------------------------------------------------------------------
+
+from tidewatch.findings import mask_secrets  # noqa: E402
+from tidewatch.rules import (  # noqa: E402
+    llm_upstream_auth_failed,
+    llm_upstream_rate_limited,
+    llm_upstream_timeout,
+)
+
+LLM_RULES = [llm_upstream_auth_failed, llm_upstream_rate_limited, llm_upstream_timeout]
+TS = "2026-11-03T02:40:{:02d}.000000000Z"
+
+
+def agent_with(*messages, ready=True, restarts=0):
+    lines = [f"{TS.format(i)} {m}" for i, m in enumerate(messages)]
+    container = cstatus(ready=ready, restarts=restarts)
+    container.recent_logs = lines
+    return mkpod(containers=[container])
+
+
+def test_llm_auth_rule_matches_common_wordings():
+    for message in (
+        "ERROR upstream model call failed: 401 Unauthorized (invalid API key)",
+        "openai-style API error: Error code: 401 - Incorrect API key provided",
+        "provider AuthenticationError: invalid api key",
+        "llm call failed: status code 403 permission denied",
+    ):
+        (f,) = run(llm_upstream_auth_failed, agent_with(message))
+        assert (f.rule_id, f.severity) == ("llm-upstream-auth-failed", "critical"), message
+
+
+def test_llm_rate_limit_rule_is_warning_and_matches_429():
+    for message in (
+        "ERROR upstream model call failed: 429 Too Many Requests (retry after 30s)",
+        "model API rate limit exceeded, retrying",
+    ):
+        (f,) = run(llm_upstream_rate_limited, agent_with(message))
+        assert f.severity == "warning", message
+    assert run(llm_upstream_auth_failed, agent_with("upstream model call failed: 429")) == []
+
+
+def test_llm_timeout_rule_needs_an_upstream_word():
+    (f,) = run(
+        llm_upstream_timeout, agent_with("ERROR upstream model call failed: timed out after 5s")
+    )
+    assert f.severity == "critical"
+    assert run(llm_upstream_timeout, agent_with("db connection timeout after 30s")) == []
+
+
+def test_llm_rules_ignore_ok_lines_and_empty_logs():
+    healthy = agent_with("INFO upstream model ok", "INFO upstream model ok")
+    startup = agent_with(
+        "ERROR upstream model call failed: connection failed: refused", "INFO upstream model ok"
+    )
+    empty = mkpod()
+    for fn in LLM_RULES:
+        for pod in (healthy, startup, empty):
+            assert run(fn, pod) == [], fn.__name__
+
+
+def test_llm_rule_evidence_says_container_is_running_and_ready():
+    pod = agent_with(*["ERROR upstream model call failed: 401 Unauthorized"] * 3)
+    (f,) = run(llm_upstream_auth_failed, pod)
+    assert "container agent: running, ready=true, 0 restarts" in f.evidence
+    assert any(e.startswith("3 of 3 recent log lines") for e in f.evidence)
+    assert f"first seen {TS.format(0)}, last seen {TS.format(2)}" in f.evidence
+    assert "while Kubernetes shows it running and ready" in f.summary
+
+
+def test_llm_rules_ignore_access_log_lines_with_401_or_429_in_ports():
+    pod = agent_with(
+        'INFO:     10.244.0.1:40123 - "GET /health HTTP/1.1" 200 OK',
+        'INFO:     10.244.0.1:54291 - "POST /v1/chat HTTP/1.1" 200 OK',
+        'INFO:     10.244.0.1:4291 - "POST /api/chat HTTP/1.1" 401 Unauthorized',
+        "INFO upstream model ok",
+    )
+    for fn in LLM_RULES:
+        assert run(fn, pod) == [], fn.__name__
+
+
+def test_llm_rule_downgrades_when_latest_upstream_line_is_ok():
+    pod = agent_with(
+        "ERROR upstream model call failed: 401 Unauthorized",
+        "ERROR upstream model call failed: 401 Unauthorized",
+        "INFO upstream model ok",
+    )
+    (f,) = run(llm_upstream_auth_failed, pod)
+    assert f.severity == "warning"
+    assert f"latest upstream call succeeded at {TS.format(2)}" in f.evidence
+    assert "healthy" not in (f.summary + f.title).lower()
+    rate = agent_with("upstream model call failed: 429 Too Many Requests", "INFO upstream model ok")
+    assert run(llm_upstream_rate_limited, rate)[0].severity == "info"
+
+
+def test_llm_auth_excerpt_masks_key_like_tokens():
+    pod = agent_with(
+        "ERROR upstream model call failed: 401 Incorrect API key provided: sk-abc123SECRET99",
+        "ERROR upstream model call failed: 401 Unauthorized Bearer eyJhbGciOi.xyz",
+    )
+    (f,) = run(llm_upstream_auth_failed, pod)
+    joined = " ".join(f.log_excerpt)
+    assert "sk-***" in joined and "Bearer ***" in joined
+    assert "abc123SECRET99" not in joined and "eyJhbGciOi" not in joined
+    assert mask_secrets(TS.format(1) + " INFO ok") == TS.format(1) + " INFO ok"
+
+
+def test_excerpts_hold_only_matched_lines():
+    pod = agent_with(
+        "INFO starting",
+        "ERROR upstream model call failed: 401 Unauthorized",
+        "INFO upstream model ok",
+        "INFO serving",
+        "ERROR upstream model call failed: 401 Unauthorized",
+    )
+    (f,) = run(llm_upstream_auth_failed, pod)
+    assert len(f.log_excerpt) == 2
+    assert all("401 Unauthorized" in line for line in f.log_excerpt)
+    crash = mkpod(
+        containers=[
+            cstatus(
+                ready=False,
+                restarts=1,
+                state=waiting("CrashLoopBackOff"),
+                last=terminated("Error", 1),
+                logs=["boot", "fatal: missing config", "bye"],
+            )
+        ]
+    )
+    assert run(container_exits_on_start, crash)[0].log_excerpt == ["fatal: missing config"]
+    quiet = mkpod(
+        containers=[
+            cstatus(
+                ready=False,
+                restarts=1,
+                state=waiting("CrashLoopBackOff"),
+                last=terminated("Error", 1),
+                logs=["boot", "loading", "bye"],
+            )
+        ]
+    )
+    assert run(container_exits_on_start, quiet)[0].log_excerpt == []  # nothing matched
