@@ -8,7 +8,7 @@ from rich.console import Console
 from rich.text import Text
 
 from tidewatch import __version__
-from tidewatch.collect import NamespaceNotFound, load_clients
+from tidewatch.collect import LOG_LINES, LOG_SINCE_SECONDS, NamespaceNotFound, load_clients
 from tidewatch.collect import collect as collect_snapshot
 from tidewatch.diagnose import diagnose
 from tidewatch.findings import Report
@@ -21,6 +21,18 @@ STYLE = {"critical": "bold red", "warning": "bold yellow", "info": "bold blue"}
 NamespaceOpt = Annotated[str, typer.Option("--namespace", "-n", help="Namespace to inspect.")]
 ContextOpt = Annotated[
     str | None, typer.Option("--context", help="kubeconfig context (default: current).")
+]
+SelectorOpt = Annotated[
+    str | None,
+    typer.Option(
+        "--selector", "-l", help="Label selector for pods, e.g. app=agent (default: all)."
+    ),
+]
+LogLinesOpt = Annotated[
+    int, typer.Option("--log-lines", min=1, help="Max log lines per container and run.")
+]
+LogSinceOpt = Annotated[
+    int, typer.Option("--log-since-minutes", min=1, help="Only read log lines this recent.")
 ]
 
 
@@ -37,11 +49,25 @@ def write_json(path: Path, data: str) -> None:
         raise fail(f"cannot write {path}: {exc}") from None
 
 
-def take_snapshot(namespace: str, context: str | None) -> Snapshot:
+def take_snapshot(
+    namespace: str,
+    context: str | None,
+    selector: str | None = None,
+    log_lines: int = LOG_LINES,
+    log_since_minutes: int = LOG_SINCE_SECONDS // 60,
+) -> Snapshot:
     context_name = context
     try:
         core, apps, context_name = load_clients(context)
-        return collect_snapshot(core, apps, namespace, context=context_name)
+        return collect_snapshot(
+            core,
+            apps,
+            namespace,
+            context=context_name,
+            selector=selector,
+            log_lines=log_lines,
+            log_since_seconds=log_since_minutes * 60,
+        )
     except NamespaceNotFound:
         raise fail(
             f"namespace '{namespace}' not found in {context_name or 'the current context'}"
@@ -68,9 +94,12 @@ def collect(
         Path | None, typer.Option("--output", "-o", help="Write JSON here (default: stdout).")
     ] = None,
     context: ContextOpt = None,
+    selector: SelectorOpt = None,
+    log_lines: LogLinesOpt = LOG_LINES,
+    log_since_minutes: LogSinceOpt = LOG_SINCE_SECONDS // 60,
 ) -> None:
     """Take a read-only snapshot of one namespace (pods, deployments, events, recent logs)."""
-    snapshot = take_snapshot(namespace, context)
+    snapshot = take_snapshot(namespace, context, selector, log_lines, log_since_minutes)
     data = snapshot.model_dump_json(indent=2) + "\n"
     if output is None:
         typer.echo(data, nl=False)
@@ -136,6 +165,9 @@ def scan(
     output: Annotated[
         Path | None, typer.Option("--output", "-o", help="Also write the report JSON here.")
     ] = None,
+    selector: SelectorOpt = None,
+    log_lines: LogLinesOpt = LOG_LINES,
+    log_since_minutes: LogSinceOpt = LOG_SINCE_SECONDS // 60,
 ) -> None:
     """Diagnose common failures in one namespace and print a ticket-ready report."""
     if (
@@ -154,7 +186,7 @@ def scan(
     elif namespace is None:
         raise fail("--namespace is required unless --from is given")
     else:
-        snapshot = take_snapshot(namespace, context)
+        snapshot = take_snapshot(namespace, context, selector, log_lines, log_since_minutes)
     report = diagnose(snapshot)
     data = report.model_dump_json(indent=2) + "\n"
     if output is not None:
