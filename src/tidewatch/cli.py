@@ -138,7 +138,13 @@ def scan(
     ] = None,
 ) -> None:
     """Diagnose common failures in one namespace and print a ticket-ready report."""
-    if output is not None and from_file is not None and output.resolve() == from_file.resolve():
+    if (
+        output is not None
+        and from_file is not None
+        and output.exists()
+        and from_file.exists()
+        and output.samefile(from_file)  # the OS decides: catches case-insensitive names, links
+    ):
         raise fail(f"refusing to overwrite the input snapshot {from_file} with the report")
     if from_file is not None:
         try:

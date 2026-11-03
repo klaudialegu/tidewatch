@@ -210,12 +210,20 @@ def test_cli_errors_with_brackets_print_literally(monkeypatch):
 
 def test_scan_refuses_to_overwrite_its_input(monkeypatch, tmp_path):
     _no_cluster(monkeypatch)
+    monkeypatch.chdir(tmp_path)
     snap = tmp_path / "snap.json"
     snap.write_text((FIXTURES / "memory.json").read_text())
+    (tmp_path / "link.json").symlink_to(snap)
     before = snap.read_text()
-    for out in (str(snap), str(tmp_path / "." / "snap.json")):
-        result = CliRunner().invoke(app, ["scan", "--from", str(snap), "-o", out])
-        assert result.exit_code == 1
+    attempts = [
+        ("snap.json", str(snap)),  # relative input, absolute output
+        (str(snap), "link.json"),  # output is a symlink to the input
+    ]
+    if Path("SNAP.JSON").exists():  # case-insensitive file system (macOS default)
+        attempts.append(("snap.json", "SNAP.JSON"))
+    for src, out in attempts:
+        result = CliRunner().invoke(app, ["scan", "--from", src, "-o", out])
+        assert result.exit_code == 1, (src, out)
         assert "refusing to overwrite the input snapshot" in result.stderr
     assert snap.read_text() == before
 
