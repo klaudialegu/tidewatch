@@ -256,3 +256,65 @@ def test_scan_reports_invalid_v1_snapshot(monkeypatch, tmp_path):
     assert result.exit_code == 1
     assert "invalid snapshot" in result.stderr
     assert "Traceback" not in result.output
+
+
+def test_selector_and_log_limits_reach_collect(monkeypatch):
+    import tidewatch.cli as cli
+
+    seen = []
+
+    def fake_collect(core, apps, namespace, **kwargs):
+        seen.append(kwargs)
+        from tidewatch.snapshot import Snapshot
+
+        return Snapshot(
+            collected_at="2026-11-02T00:00:00Z", context="kind-test", namespace=namespace
+        )
+
+    monkeypatch.setattr(cli, "load_clients", lambda context: (None, None, "kind-test"))
+    monkeypatch.setattr(cli, "collect_snapshot", fake_collect)
+    args = ["-n", "demo", "-l", "app=agent", "--log-lines", "7", "--log-since-minutes", "5"]
+    for command in ("collect", "scan"):
+        result = CliRunner().invoke(app, [command, *args])
+        assert result.exit_code == 0, result.output
+    assert (
+        seen
+        == [
+            {
+                "context": "kind-test",
+                "selector": "app=agent",
+                "log_lines": 7,
+                "log_since_seconds": 300,
+            }
+        ]
+        * 2
+    )
+
+
+def test_log_limits_reject_zero(monkeypatch):
+    _fake_clients(monkeypatch)
+    for flag in ("--log-lines", "--log-since-minutes"):
+        result = CliRunner().invoke(app, ["scan", "-n", "demo", flag, "0"])
+        assert result.exit_code == 2, flag
+
+
+def test_invalid_selector_prints_only_the_api_reason(monkeypatch):
+    import json
+
+    from fakes import FakeApps, FakeCore
+    from kubernetes.client.exceptions import ApiException
+
+    import tidewatch.cli as cli
+
+    error = ApiException(status=400, reason="Bad Request")
+    error.body = json.dumps({"message": "unable to parse requirement: found '!', expected: ','"})
+    monkeypatch.setattr(
+        cli, "load_clients", lambda context: (FakeCore(list_error=error), FakeApps(), "kind-test")
+    )
+    for command in ("collect", "scan"):
+        result = CliRunner().invoke(app, [command, "-n", "demo", "-l", "bad!!"])
+        assert result.exit_code == 1, command
+        assert result.stderr.strip() == (
+            "error: invalid --selector 'bad!!': "
+            "unable to parse requirement: found '!', expected: ','"
+        )

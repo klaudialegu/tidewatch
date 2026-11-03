@@ -1,6 +1,12 @@
 """The snapshot: a versioned, JSON-serialisable picture of one namespace at one moment.
 
 It holds only what diagnosis needs. Secrets and environment variable values are never collected.
+Logs are: a bounded tail (line count and time window) of the previous and current run of each
+container. Logs can contain anything an app prints, which is why snapshots and reports must not be
+shared outside the team until redaction exists (ADR 0003, ADR 0004).
+
+Schema policy (ADR 0004): adding an optional field keeps schema_version "1"; renaming, removing or
+changing the meaning of a field needs "2".
 """
 
 import json
@@ -30,12 +36,20 @@ class ContainerStatus(BaseModel):
     previous_logs: list[str] = Field(
         default_factory=list, description="Last lines from the previous run, if it restarted."
     )
+    recent_logs: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Last lines of the current run, each '<RFC3339 timestamp> <message>' exactly as the "
+            "Kubernetes API returns it with timestamps=true. Bounded by the snapshot's log limits."
+        ),
+    )
 
 
 class Pod(BaseModel):
     name: str
     phase: str | None
     owner: str | None = Field(None, description='"Kind/name" of the controlling owner.')
+    labels: dict[str, str] = Field(default_factory=dict)
     conditions: dict[str, str] = Field(default_factory=dict)
     containers: list[ContainerStatus] = Field(default_factory=list)
 
@@ -72,6 +86,9 @@ class Snapshot(BaseModel):
     collected_at: datetime
     context: str | None
     namespace: str
+    selector: str | None = Field(None, description="Label selector the pods were listed with.")
+    log_lines: int | None = Field(None, description="Max log lines read per container and run.")
+    log_since_seconds: int | None = Field(None, description="Log time window, in seconds.")
     pods: list[Pod] = Field(default_factory=list)
     deployments: list[Deployment] = Field(default_factory=list)
     events: list[Event] = Field(default_factory=list)

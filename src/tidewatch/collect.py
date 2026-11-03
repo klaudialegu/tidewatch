@@ -1,5 +1,6 @@
 """Collect a Snapshot from a cluster. Read-only: list_* and read_* calls only (test_read_only)."""
 
+import json
 from datetime import UTC, datetime
 from typing import Any
 
@@ -13,11 +14,24 @@ from tidewatch.snapshot import (
     Snapshot,
 )
 
-LOG_LINES = 20
+LOG_LINES = 50
+LOG_SINCE_SECONDS = 3600
+
+
+class InvalidSelector(Exception):
+    """The API rejected the label selector; the message is the API's own one-line reason."""
 
 
 class NamespaceNotFound(Exception):
     """The namespace doesn't exist (a typo must not look like an empty, healthy namespace)."""
+
+
+def _api_message(exc: Any) -> str:
+    """The `message` field of a Kubernetes API error body, without the HTTP headers."""
+    try:
+        return json.loads(exc.body).get("message") or "bad request"
+    except (TypeError, ValueError, AttributeError):
+        return "bad request"
 
 
 def load_clients(context: str | None = None) -> tuple[Any, Any, str | None]:
@@ -48,22 +62,39 @@ def _state(state: Any) -> ContainerState | None:
     return None
 
 
-def _previous_logs(core: Any, namespace: str, pod: str, container: str) -> list[str]:
+def _logs(
+    core: Any,
+    namespace: str,
+    pod: str,
+    container: str,
+    *,
+    previous: bool,
+    lines: int,
+    since_seconds: int,
+) -> list[str]:
+    """A bounded log tail: never more than `lines` lines or older than `since_seconds`."""
     try:
         text = core.read_namespaced_pod_log(
-            pod, namespace, container=container, previous=True, tail_lines=LOG_LINES
+            pod,
+            namespace,
+            container=container,
+            previous=previous,
+            tail_lines=lines,
+            since_seconds=since_seconds,
+            timestamps=not previous,
         )
-    except Exception:  # no previous run, pod gone, or no permission: logs are best-effort
+    except Exception:  # no such run, pod gone, or no permission: logs are best-effort
         return []
-    return text.splitlines()[-LOG_LINES:] if text else []
+    return text.splitlines()[-lines:] if text else []
 
 
-def _pod(core: Any, namespace: str, item: Any) -> Pod:
+def _pod(core: Any, namespace: str, item: Any, lines: int, since_seconds: int) -> Pod:
     owners = item.metadata.owner_references or []
     owner = next((f"{o.kind}/{o.name}" for o in owners if o.controller), None)
     containers = []
     for status in item.status.container_statuses or []:
         restarts = status.restart_count or 0
+        limits = {"lines": lines, "since_seconds": since_seconds}
         containers.append(
             ContainerStatus(
                 name=status.name,
@@ -73,9 +104,12 @@ def _pod(core: Any, namespace: str, item: Any) -> Pod:
                 state=_state(status.state) or ContainerState(state="unknown"),
                 last_state=_state(status.last_state),
                 previous_logs=(
-                    _previous_logs(core, namespace, item.metadata.name, status.name)
+                    _logs(core, namespace, item.metadata.name, status.name, previous=True, **limits)
                     if restarts
                     else []
+                ),
+                recent_logs=_logs(
+                    core, namespace, item.metadata.name, status.name, previous=False, **limits
                 ),
             )
         )
@@ -83,6 +117,7 @@ def _pod(core: Any, namespace: str, item: Any) -> Pod:
         name=item.metadata.name,
         phase=item.status.phase,
         owner=owner,
+        labels=dict(item.metadata.labels or {}),
         conditions={c.type: c.status for c in item.status.conditions or []},
         containers=containers,
     )
@@ -133,6 +168,9 @@ def collect(
     namespace: str,
     context: str | None = None,
     now: datetime | None = None,
+    selector: str | None = None,
+    log_lines: int = LOG_LINES,
+    log_since_seconds: int = LOG_SINCE_SECONDS,
 ) -> Snapshot:
     from kubernetes.client.exceptions import ApiException
 
@@ -142,14 +180,25 @@ def collect(
         if exc.status == 404:
             raise NamespaceNotFound(namespace) from None
         raise
-    pods = core.list_namespaced_pod(namespace).items
+    try:
+        pods = core.list_namespaced_pod(namespace, label_selector=selector).items
+    except ApiException as exc:
+        if exc.status == 400 and selector:
+            raise InvalidSelector(_api_message(exc)) from None
+        raise
     deployments = apps.list_namespaced_deployment(namespace).items
     events = core.list_namespaced_event(namespace).items
     return Snapshot(
         collected_at=now or datetime.now(UTC),
         context=context,
         namespace=namespace,
-        pods=sorted((_pod(core, namespace, p) for p in pods), key=lambda p: p.name),
+        selector=selector,
+        log_lines=log_lines,
+        log_since_seconds=log_since_seconds,
+        pods=sorted(
+            (_pod(core, namespace, p, log_lines, log_since_seconds) for p in pods),
+            key=lambda p: p.name,
+        ),
         deployments=sorted((_deployment(d) for d in deployments), key=lambda d: d.name),
         events=sorted(
             (_event(e) for e in events),

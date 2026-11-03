@@ -30,7 +30,9 @@ def expect_bad_image(base: dict) -> None:
 
 
 def expect_no_key(base: dict) -> None:
-    del container(base)["env"]
+    env = container(base)["env"]
+    assert env[0]["name"] == "API_KEY"
+    del env[0]
 
 
 def expect_memory(base: dict) -> None:
@@ -38,13 +40,33 @@ def expect_memory(base: dict) -> None:
     container(base)["resources"]["limits"]["memory"] = "64Mi"
 
 
-EXPECTED = {"bad-image": expect_bad_image, "no-key": expect_no_key, "memory": expect_memory}
+def model_env(base: dict) -> list:
+    return base[("Deployment", "model")]["spec"]["template"]["spec"]["containers"][0]["env"]
+
+
+def expect_model_mode(mode: str):
+    def apply(base: dict) -> None:
+        env = model_env(base)
+        assert env[0]["name"] == "MODEL_MODE"
+        env[0]["value"] = mode
+
+    return apply
+
+
+EXPECTED = {
+    "bad-image": expect_bad_image,
+    "no-key": expect_no_key,
+    "memory": expect_memory,
+    "llm-bad-key": expect_model_mode("reject-key"),
+    "llm-rate-limit": expect_model_mode("rate-limit"),
+    "llm-timeout": expect_model_mode("slow"),
+}
 
 
 def test_base_kustomization_renders_the_healthy_manifests():
     rendered = render(LAB / "k8s")
     files = {}
-    for name in ("namespace.yaml", "deployment.yaml", "service.yaml"):
+    for name in ("namespace.yaml", "deployment.yaml", "service.yaml", "model.yaml"):
         for doc in yaml.safe_load_all((LAB / "k8s" / name).read_text()):
             files[(doc["kind"], doc["metadata"]["name"])] = doc
     assert rendered == files

@@ -7,7 +7,8 @@
 #   lab/scenario.sh apply <name>    apply one scenario by name
 #   lab/scenario.sh apply-random    blind mode: apply one you haven't done yet, without naming it
 #   lab/scenario.sh reveal          name the scenario that is currently applied (none after a reset)
-#   lab/scenario.sh reset           back to the healthy patient (does not clear blind-mode history)
+#   lab/scenario.sh reset           back to the healthy patient, agent restarted so old log lines
+#                                   are gone (does not clear blind-mode history)
 #   lab/scenario.sh restart-round   clear blind-mode history, so every scenario is "new" again
 set -euo pipefail
 
@@ -15,7 +16,7 @@ CLUSTER="tidewatch-lab"
 CONTEXT="kind-${CLUSTER}"
 NS="demo"
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SCENARIOS=(bad-image no-key memory)
+SCENARIOS=(bad-image no-key memory llm-bad-key llm-rate-limit llm-timeout)
 # Blind-mode memory: one used scenario per line, the last line is the current one (gitignored).
 STATE="${SCENARIO_STATE:-${HERE}/.scenario-state}"
 
@@ -99,6 +100,9 @@ case "${cmd}" in
     ;;
   reset)
     k apply -k "${HERE}/k8s" >/dev/null
+    # Restart the agent so log lines from an earlier scenario can't linger into the next round.
+    k -n "${NS}" rollout restart deployment/agent >/dev/null
+    k -n "${NS}" rollout status deployment/model --timeout=120s
     k -n "${NS}" rollout status deployment/agent --timeout=120s
     echo "reset" >> "${STATE}"
     echo "patient reset to healthy"

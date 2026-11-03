@@ -36,10 +36,12 @@ def container_status(
     )
 
 
-def pod(name="agent-abc", phase="Running", statuses=None, ready="True"):
+def pod(name="agent-abc", phase="Running", statuses=None, ready="True", labels=None):
     return NS(
         metadata=NS(
-            name=name, owner_references=[NS(kind="ReplicaSet", name="agent-rs", controller=True)]
+            name=name,
+            owner_references=[NS(kind="ReplicaSet", name="agent-rs", controller=True)],
+            labels=labels if labels is not None else {"app": "agent"},
         ),
         status=NS(
             phase=phase,
@@ -80,7 +82,10 @@ def event(reason="Scheduled", kind="Pod", name="agent-abc", typ="Normal", count=
 class FakeCore:
     """Only the allowed read calls exist; anything else fails the test loudly."""
 
-    def __init__(self, pods=(), events=(), logs=None, log_error=None, namespaces=("demo",)):
+    def __init__(
+        self, pods=(), events=(), logs=None, log_error=None, namespaces=("demo",), list_error=None
+    ):
+        self._list_error = list_error
         self._pods, self._events = list(pods), list(events)
         self._logs, self._log_error = logs, log_error
         self._namespaces = set(namespaces)
@@ -94,8 +99,10 @@ class FakeCore:
             raise ApiException(status=404, reason="Not Found")
         return NS(metadata=NS(name=name))
 
-    def list_namespaced_pod(self, namespace):
-        self.calls.append(("list_namespaced_pod", namespace))
+    def list_namespaced_pod(self, namespace, label_selector=None):
+        self.calls.append(("list_namespaced_pod", namespace, {"label_selector": label_selector}))
+        if self._list_error:
+            raise self._list_error
         return NS(items=self._pods)
 
     def list_namespaced_event(self, namespace):

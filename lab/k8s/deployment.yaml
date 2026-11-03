@@ -26,7 +26,7 @@ spec:
         runAsGroup: 10001
       containers:
         - name: agent
-          image: tidewatch-agent:0.1.0
+          image: tidewatch-agent:0.2.0
           imagePullPolicy: IfNotPresent
           ports:
             - name: http
@@ -37,6 +37,8 @@ spec:
                 secretKeyRef:
                   name: agent-secret
                   key: API_KEY
+            - name: MODEL_URL
+              value: http://model/v1/chat
           resources:
             requests:
               memory: 64Mi

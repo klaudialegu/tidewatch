@@ -102,3 +102,23 @@ def test_load_rejects_invalid_v1_snapshot(tmp_path):
     path.write_text('{"schema_version": "1", "namespace": "demo", "pods": "not a list"}')
     with pytest.raises(SnapshotLoadError, match="invalid snapshot"):
         load(path)
+
+
+def test_snapshot_without_recent_logs_still_loads_as_v1(tmp_path):
+    import json
+
+    from tidewatch.snapshot import load
+
+    data = json.loads((Path(__file__).resolve().parent / "fixtures" / "healthy.json").read_text())
+    for p in data["pods"]:
+        p.pop("labels", None)
+        for c in p["containers"]:
+            c.pop("recent_logs", None)
+    for key in ("selector", "log_lines", "log_since_seconds"):
+        data.pop(key, None)
+    path = tmp_path / "old.json"
+    path.write_text(json.dumps(data))
+    snap = load(path)
+    assert snap.schema_version == "1"
+    assert all(c.recent_logs == [] for p in snap.pods for c in p.containers)
+    assert all(p.labels == {} for p in snap.pods)
