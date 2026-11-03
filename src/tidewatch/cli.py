@@ -8,7 +8,13 @@ from rich.console import Console
 from rich.text import Text
 
 from tidewatch import __version__
-from tidewatch.collect import LOG_LINES, LOG_SINCE_SECONDS, NamespaceNotFound, load_clients
+from tidewatch.collect import (
+    LOG_LINES,
+    LOG_SINCE_SECONDS,
+    InvalidSelector,
+    NamespaceNotFound,
+    load_clients,
+)
 from tidewatch.collect import collect as collect_snapshot
 from tidewatch.diagnose import diagnose
 from tidewatch.findings import Report
@@ -25,7 +31,12 @@ ContextOpt = Annotated[
 SelectorOpt = Annotated[
     str | None,
     typer.Option(
-        "--selector", "-l", help="Label selector for pods, e.g. app=agent (default: all)."
+        "--selector",
+        "-l",
+        help=(
+            "Label selector for pods, e.g. app=agent (default: all). Narrows pods only: "
+            "Deployments and events of the whole namespace are still collected."
+        ),
     ),
 ]
 LogLinesOpt = Annotated[
@@ -68,6 +79,8 @@ def take_snapshot(
             log_lines=log_lines,
             log_since_seconds=log_since_minutes * 60,
         )
+    except InvalidSelector as exc:
+        raise fail(f"invalid --selector {selector!r}: {exc}") from None
     except NamespaceNotFound:
         raise fail(
             f"namespace '{namespace}' not found in {context_name or 'the current context'}"

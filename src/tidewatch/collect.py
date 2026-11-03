@@ -1,5 +1,6 @@
 """Collect a Snapshot from a cluster. Read-only: list_* and read_* calls only (test_read_only)."""
 
+import json
 from datetime import UTC, datetime
 from typing import Any
 
@@ -17,8 +18,20 @@ LOG_LINES = 50
 LOG_SINCE_SECONDS = 3600
 
 
+class InvalidSelector(Exception):
+    """The API rejected the label selector; the message is the API's own one-line reason."""
+
+
 class NamespaceNotFound(Exception):
     """The namespace doesn't exist (a typo must not look like an empty, healthy namespace)."""
+
+
+def _api_message(exc: Any) -> str:
+    """The `message` field of a Kubernetes API error body, without the HTTP headers."""
+    try:
+        return json.loads(exc.body).get("message") or "bad request"
+    except (TypeError, ValueError, AttributeError):
+        return "bad request"
 
 
 def load_clients(context: str | None = None) -> tuple[Any, Any, str | None]:
@@ -167,7 +180,12 @@ def collect(
         if exc.status == 404:
             raise NamespaceNotFound(namespace) from None
         raise
-    pods = core.list_namespaced_pod(namespace, label_selector=selector).items
+    try:
+        pods = core.list_namespaced_pod(namespace, label_selector=selector).items
+    except ApiException as exc:
+        if exc.status == 400 and selector:
+            raise InvalidSelector(_api_message(exc)) from None
+        raise
     deployments = apps.list_namespaced_deployment(namespace).items
     events = core.list_namespaced_event(namespace).items
     return Snapshot(

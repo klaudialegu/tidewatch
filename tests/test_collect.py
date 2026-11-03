@@ -198,3 +198,21 @@ def test_collect_records_labels_and_passes_selector():
     assert listing[2] == {"label_selector": "app=agent"}
     assert snap.selector == "app=agent"
     assert snap.pods[0].labels == {"app": "agent", "tier": "ai"}
+
+
+def _bad_request():
+    import json
+
+    error = ApiException(status=400, reason="Bad Request")
+    error.body = json.dumps({"message": 'unable to parse requirement: invalid label key "bad!!"'})
+    error.headers = {"Audit-Id": "abc-123"}
+    return error
+
+
+def test_collect_turns_a_rejected_selector_into_one_line():
+    from tidewatch.collect import InvalidSelector
+
+    core = FakeCore(list_error=_bad_request())
+    with pytest.raises(InvalidSelector) as info:
+        collect(core, FakeApps(), "demo", now=T0, selector="bad!!")
+    assert str(info.value) == 'unable to parse requirement: invalid label key "bad!!"'

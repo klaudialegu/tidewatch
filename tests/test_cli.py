@@ -296,3 +296,25 @@ def test_log_limits_reject_zero(monkeypatch):
     for flag in ("--log-lines", "--log-since-minutes"):
         result = CliRunner().invoke(app, ["scan", "-n", "demo", flag, "0"])
         assert result.exit_code == 2, flag
+
+
+def test_invalid_selector_prints_only_the_api_reason(monkeypatch):
+    import json
+
+    from fakes import FakeApps, FakeCore
+    from kubernetes.client.exceptions import ApiException
+
+    import tidewatch.cli as cli
+
+    error = ApiException(status=400, reason="Bad Request")
+    error.body = json.dumps({"message": "unable to parse requirement: found '!', expected: ','"})
+    monkeypatch.setattr(
+        cli, "load_clients", lambda context: (FakeCore(list_error=error), FakeApps(), "kind-test")
+    )
+    for command in ("collect", "scan"):
+        result = CliRunner().invoke(app, [command, "-n", "demo", "-l", "bad!!"])
+        assert result.exit_code == 1, command
+        assert result.stderr.strip() == (
+            "error: invalid --selector 'bad!!': "
+            "unable to parse requirement: found '!', expected: ','"
+        )
