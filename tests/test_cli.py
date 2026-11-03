@@ -206,3 +206,45 @@ def test_cli_errors_with_brackets_print_literally(monkeypatch):
         assert result.exit_code == 1, command
         assert "could not collect from the cluster: bad [/x] path" in result.stderr
         assert "Traceback" not in result.output
+
+
+def test_scan_refuses_to_overwrite_its_input(monkeypatch, tmp_path):
+    _no_cluster(monkeypatch)
+    snap = tmp_path / "snap.json"
+    snap.write_text((FIXTURES / "memory.json").read_text())
+    before = snap.read_text()
+    for out in (str(snap), str(tmp_path / "." / "snap.json")):
+        result = CliRunner().invoke(app, ["scan", "--from", str(snap), "-o", out])
+        assert result.exit_code == 1
+        assert "refusing to overwrite the input snapshot" in result.stderr
+    assert snap.read_text() == before
+
+
+def test_scan_reports_unwritable_output_file(monkeypatch, tmp_path):
+    _no_cluster(monkeypatch)
+    out = tmp_path / "no-such-dir" / "report.json"
+    result = CliRunner().invoke(
+        app, ["scan", "--from", str(FIXTURES / "healthy.json"), "-o", str(out)]
+    )
+    assert result.exit_code == 1
+    assert f"cannot write {out}" in result.stderr
+    assert "Traceback" not in result.output
+
+
+def test_collect_reports_unwritable_output_file(monkeypatch, tmp_path):
+    _fake_clients(monkeypatch)
+    out = tmp_path / "no-such-dir" / "snapshot.json"
+    result = CliRunner().invoke(app, ["collect", "-n", "demo", "-o", str(out)])
+    assert result.exit_code == 1
+    assert f"cannot write {out}" in result.stderr
+    assert "Traceback" not in result.output
+
+
+def test_scan_reports_invalid_v1_snapshot(monkeypatch, tmp_path):
+    _no_cluster(monkeypatch)
+    path = tmp_path / "bad.json"
+    path.write_text('{"schema_version": "1", "pods": "not a list"}')
+    result = CliRunner().invoke(app, ["scan", "--from", str(path)])
+    assert result.exit_code == 1
+    assert "invalid snapshot" in result.stderr
+    assert "Traceback" not in result.output

@@ -91,3 +91,14 @@ def test_load_reads_a_fixture():
 
     snap = load(Path(__file__).resolve().parent / "fixtures" / "memory.json", namespace="demo")
     assert (snap.namespace, snap.schema_version) == ("demo", "1")
+
+
+def test_load_rejects_invalid_v1_snapshot(tmp_path):
+    import pytest
+
+    from tidewatch.snapshot import SnapshotLoadError, load
+
+    path = tmp_path / "bad.json"
+    path.write_text('{"schema_version": "1", "namespace": "demo", "pods": "not a list"}')
+    with pytest.raises(SnapshotLoadError, match="invalid snapshot"):
+        load(path)

@@ -30,6 +30,13 @@ def fail(message: str) -> typer.Exit:
     return typer.Exit(1)
 
 
+def write_json(path: Path, data: str) -> None:
+    try:
+        path.write_text(data)
+    except OSError as exc:
+        raise fail(f"cannot write {path}: {exc}") from None
+
+
 def take_snapshot(namespace: str, context: str | None) -> Snapshot:
     context_name = context
     try:
@@ -68,7 +75,7 @@ def collect(
     if output is None:
         typer.echo(data, nl=False)
     else:
-        output.write_text(data)
+        write_json(output, data)
     err.print(
         Text(
             f"collected {len(snapshot.pods)} pods, {len(snapshot.deployments)} deployments, "
@@ -131,6 +138,8 @@ def scan(
     ] = None,
 ) -> None:
     """Diagnose common failures in one namespace and print a ticket-ready report."""
+    if output is not None and from_file is not None and output.resolve() == from_file.resolve():
+        raise fail(f"refusing to overwrite the input snapshot {from_file} with the report")
     if from_file is not None:
         try:
             snapshot = load(from_file, namespace)
@@ -143,7 +152,7 @@ def scan(
     report = diagnose(snapshot)
     data = report.model_dump_json(indent=2) + "\n"
     if output is not None:
-        output.write_text(data)
+        write_json(output, data)
     if as_json:
         typer.echo(data, nl=False)
     else:
