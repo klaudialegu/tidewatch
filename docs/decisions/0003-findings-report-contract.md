@@ -14,6 +14,7 @@ A report (`schema_version: "1"`) holds the source (context, namespace, snapshot 
 - Severity from the rule alone: restart-based rules would stay critical forever after one crash, because Kubernetes keeps the last run's status for the pod's whole life.
 
 ## Consequences
-- Good: evidence holds no raw log lines, and `log_excerpt` is a single field that redaction or an AI step can drop. Evidence can still contain object names, image references and event messages (which may include internal hostnames); redaction will handle those, so reports aren't safe to share outside the team until it exists.
+- Good: evidence holds no raw log lines, and `log_excerpt` is a single field that redaction or an AI step can drop.
+- Trade-off: evidence can still contain object names, image references and event messages (which may include internal hostnames). Reports aren't safe to share outside the team until redaction exists.
 - Good: severity reflects the snapshot: critical while a container is down, warning once it runs again (stated as facts, never "healthy"), info for node or runtime restarts.
 - Trade-off: any change to these fields means `schema_version` "2" and a reader that understands both.
