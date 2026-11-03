@@ -1,13 +1,20 @@
 {
   "schema_version": "1",
-  "collected_at": "2026-11-02T00:24:10.401149Z",
+  "collected_at": "2026-11-03T02:42:28.806560Z",
   "context": "kind-tidewatch-lab",
   "namespace": "demo",
+  "selector": null,
+  "log_lines": 50,
+  "log_since_seconds": 3600,
   "pods": [
     {
-      "name": "agent-7c8b696666-n4tdz",
+      "name": "agent-554c9df758-rflzs",
       "phase": "Running",
-      "owner": "ReplicaSet/agent-7c8b696666",
+      "owner": "ReplicaSet/agent-554c9df758",
+      "labels": {
+        "app": "agent",
+        "pod-template-hash": "554c9df758"
+      },
       "conditions": {
         "PodReadyToStartContainers": "True",
         "Initialized": "True",
@@ -18,13 +25,13 @@
       "containers": [
         {
           "name": "agent",
-          "image": "docker.io/library/tidewatch-agent:0.1.0",
+          "image": "docker.io/library/tidewatch-agent:0.2.0",
           "ready": false,
           "restart_count": 3,
           "state": {
             "state": "waiting",
             "reason": "CrashLoopBackOff",
-            "message": "back-off 40s restarting failed container=agent pod=agent-7c8b696666-n4tdz_demo(1500e17b-b182-43b3-8124-e78c59d1c675)",
+            "message": "back-off 40s restarting failed container=agent pod=agent-554c9df758-rflzs_demo(aa3c0014-65f6-4f7f-88b7-b6d9c39b7fd8)",
             "exit_code": null
           },
           "last_state": {
@@ -35,6 +42,47 @@
           },
           "previous_logs": [
             "fatal: API_KEY is not set"
+          ],
+          "recent_logs": [
+            "2026-11-03T02:42:13.081470805Z fatal: API_KEY is not set"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "model-7c868dfc49-f9626",
+      "phase": "Running",
+      "owner": "ReplicaSet/model-7c868dfc49",
+      "labels": {
+        "app": "model",
+        "pod-template-hash": "7c868dfc49"
+      },
+      "conditions": {
+        "PodReadyToStartContainers": "True",
+        "Initialized": "True",
+        "Ready": "True",
+        "ContainersReady": "True",
+        "PodScheduled": "True"
+      },
+      "containers": [
+        {
+          "name": "model",
+          "image": "docker.io/library/tidewatch-agent:0.2.0",
+          "ready": true,
+          "restart_count": 0,
+          "state": {
+            "state": "running",
+            "reason": null,
+            "message": null,
+            "exit_code": null
+          },
+          "last_state": null,
+          "previous_logs": [],
+          "recent_logs": [
+            "2026-11-03T02:41:23.650061087Z INFO:     Started server process [1]",
+            "2026-11-03T02:41:23.650084337Z INFO:     Waiting for application startup.",
+            "2026-11-03T02:41:23.650354337Z INFO:     Application startup complete.",
+            "2026-11-03T02:41:23.650469796Z INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)"
           ]
         }
       ]
@@ -49,7 +97,23 @@
       "containers": [
         {
           "name": "agent",
-          "image": "tidewatch-agent:0.1.0",
+          "image": "tidewatch-agent:0.2.0",
+          "memory_request": "64Mi",
+          "memory_limit": "128Mi",
+          "cpu_request": "50m",
+          "cpu_limit": "250m"
+        }
+      ]
+    },
+    {
+      "name": "model",
+      "replicas": 1,
+      "ready_replicas": 1,
+      "available_replicas": 1,
+      "containers": [
+        {
+          "name": "model",
+          "image": "tidewatch-agent:0.2.0",
           "memory_request": "64Mi",
           "memory_limit": "128Mi",
           "cpu_request": "50m",
@@ -63,145 +127,199 @@
       "type": "Normal",
       "reason": "ScalingReplicaSet",
       "object": "Deployment/agent",
-      "message": "Scaled up replica set agent-667f98c558 from 0 to 1",
+      "message": "Scaled up replica set agent-fbdb89b9f from 0 to 1",
       "count": 1,
-      "first_seen": "2026-11-02T00:23:03Z",
-      "last_seen": "2026-11-02T00:23:03Z"
+      "first_seen": "2026-11-03T02:41:21Z",
+      "last_seen": "2026-11-03T02:41:21Z"
     },
     {
       "type": "Normal",
-      "reason": "Scheduled",
-      "object": "Pod/agent-667f98c558-9vzjz",
-      "message": "Successfully assigned demo/agent-667f98c558-9vzjz to tidewatch-lab-control-plane",
+      "reason": "ScalingReplicaSet",
+      "object": "Deployment/model",
+      "message": "Scaled up replica set model-7c868dfc49 from 0 to 1",
       "count": 1,
-      "first_seen": "2026-11-02T00:23:03Z",
-      "last_seen": "2026-11-02T00:23:03Z"
-    },
-    {
-      "type": "Normal",
-      "reason": "SuccessfulCreate",
-      "object": "ReplicaSet/agent-667f98c558",
-      "message": "Created pod: agent-667f98c558-9vzjz",
-      "count": 1,
-      "first_seen": "2026-11-02T00:23:03Z",
-      "last_seen": "2026-11-02T00:23:03Z"
+      "first_seen": "2026-11-03T02:41:21Z",
+      "last_seen": "2026-11-03T02:41:21Z"
     },
     {
       "type": "Normal",
       "reason": "Pulled",
-      "object": "Pod/agent-667f98c558-9vzjz",
-      "message": "Container image \"tidewatch-agent:0.1.0\" already present on machine and can be accessed by the pod",
+      "object": "Pod/agent-fbdb89b9f-kmtz6",
+      "message": "Container image \"tidewatch-agent:0.2.0\" already present on machine and can be accessed by the pod",
       "count": 1,
-      "first_seen": "2026-11-02T00:23:04Z",
-      "last_seen": "2026-11-02T00:23:04Z"
+      "first_seen": "2026-11-03T02:41:21Z",
+      "last_seen": "2026-11-03T02:41:21Z"
     },
     {
       "type": "Normal",
       "reason": "Created",
-      "object": "Pod/agent-667f98c558-9vzjz",
+      "object": "Pod/agent-fbdb89b9f-kmtz6",
       "message": "Container created",
       "count": 1,
-      "first_seen": "2026-11-02T00:23:04Z",
-      "last_seen": "2026-11-02T00:23:04Z"
+      "first_seen": "2026-11-03T02:41:21Z",
+      "last_seen": "2026-11-03T02:41:21Z"
+    },
+    {
+      "type": "Normal",
+      "reason": "SuccessfulCreate",
+      "object": "ReplicaSet/agent-fbdb89b9f",
+      "message": "Created pod: agent-fbdb89b9f-kmtz6",
+      "count": 1,
+      "first_seen": "2026-11-03T02:41:21Z",
+      "last_seen": "2026-11-03T02:41:21Z"
+    },
+    {
+      "type": "Normal",
+      "reason": "SuccessfulCreate",
+      "object": "ReplicaSet/model-7c868dfc49",
+      "message": "Created pod: model-7c868dfc49-f9626",
+      "count": 1,
+      "first_seen": "2026-11-03T02:41:21Z",
+      "last_seen": "2026-11-03T02:41:21Z"
+    },
+    {
+      "type": "Normal",
+      "reason": "Scheduled",
+      "object": "Pod/agent-fbdb89b9f-kmtz6",
+      "message": "Successfully assigned demo/agent-fbdb89b9f-kmtz6 to tidewatch-lab-control-plane",
+      "count": 1,
+      "first_seen": "2026-11-03T02:41:21.611021Z",
+      "last_seen": "2026-11-03T02:41:21.611021Z"
+    },
+    {
+      "type": "Normal",
+      "reason": "Scheduled",
+      "object": "Pod/model-7c868dfc49-f9626",
+      "message": "Successfully assigned demo/model-7c868dfc49-f9626 to tidewatch-lab-control-plane",
+      "count": 1,
+      "first_seen": "2026-11-03T02:41:21.619676Z",
+      "last_seen": "2026-11-03T02:41:21.619676Z"
     },
     {
       "type": "Normal",
       "reason": "Started",
-      "object": "Pod/agent-667f98c558-9vzjz",
+      "object": "Pod/agent-fbdb89b9f-kmtz6",
       "message": "Container started",
       "count": 1,
-      "first_seen": "2026-11-02T00:23:04Z",
-      "last_seen": "2026-11-02T00:23:04Z"
+      "first_seen": "2026-11-03T02:41:22Z",
+      "last_seen": "2026-11-03T02:41:22Z"
+    },
+    {
+      "type": "Normal",
+      "reason": "Pulled",
+      "object": "Pod/model-7c868dfc49-f9626",
+      "message": "Container image \"tidewatch-agent:0.2.0\" already present on machine and can be accessed by the pod",
+      "count": 1,
+      "first_seen": "2026-11-03T02:41:22Z",
+      "last_seen": "2026-11-03T02:41:22Z"
+    },
+    {
+      "type": "Normal",
+      "reason": "Created",
+      "object": "Pod/model-7c868dfc49-f9626",
+      "message": "Container created",
+      "count": 1,
+      "first_seen": "2026-11-03T02:41:22Z",
+      "last_seen": "2026-11-03T02:41:22Z"
+    },
+    {
+      "type": "Normal",
+      "reason": "Started",
+      "object": "Pod/model-7c868dfc49-f9626",
+      "message": "Container started",
+      "count": 1,
+      "first_seen": "2026-11-03T02:41:22Z",
+      "last_seen": "2026-11-03T02:41:22Z"
     },
     {
       "type": "Normal",
       "reason": "ScalingReplicaSet",
       "object": "Deployment/agent",
-      "message": "Scaled down replica set agent-667f98c558 from 1 to 0",
+      "message": "Scaled down replica set agent-fbdb89b9f from 1 to 0",
       "count": 1,
-      "first_seen": "2026-11-02T00:23:09Z",
-      "last_seen": "2026-11-02T00:23:09Z"
-    },
-    {
-      "type": "Normal",
-      "reason": "SuccessfulDelete",
-      "object": "ReplicaSet/agent-667f98c558",
-      "message": "Deleted pod: agent-667f98c558-9vzjz",
-      "count": 1,
-      "first_seen": "2026-11-02T00:23:09Z",
-      "last_seen": "2026-11-02T00:23:09Z"
-    },
-    {
-      "type": "Normal",
-      "reason": "ScalingReplicaSet",
-      "object": "Deployment/agent",
-      "message": "Scaled up replica set agent-7c8b696666 from 0 to 1",
-      "count": 1,
-      "first_seen": "2026-11-02T00:23:10Z",
-      "last_seen": "2026-11-02T00:23:10Z"
+      "first_seen": "2026-11-03T02:41:28Z",
+      "last_seen": "2026-11-03T02:41:28Z"
     },
     {
       "type": "Normal",
       "reason": "Killing",
-      "object": "Pod/agent-667f98c558-9vzjz",
+      "object": "Pod/agent-fbdb89b9f-kmtz6",
       "message": "Stopping container agent",
       "count": 1,
-      "first_seen": "2026-11-02T00:23:10Z",
-      "last_seen": "2026-11-02T00:23:10Z"
+      "first_seen": "2026-11-03T02:41:28Z",
+      "last_seen": "2026-11-03T02:41:28Z"
     },
     {
       "type": "Normal",
-      "reason": "Scheduled",
-      "object": "Pod/agent-7c8b696666-n4tdz",
-      "message": "Successfully assigned demo/agent-7c8b696666-n4tdz to tidewatch-lab-control-plane",
+      "reason": "SuccessfulDelete",
+      "object": "ReplicaSet/agent-fbdb89b9f",
+      "message": "Deleted pod: agent-fbdb89b9f-kmtz6",
       "count": 1,
-      "first_seen": "2026-11-02T00:23:10Z",
-      "last_seen": "2026-11-02T00:23:10Z"
+      "first_seen": "2026-11-03T02:41:28Z",
+      "last_seen": "2026-11-03T02:41:28Z"
+    },
+    {
+      "type": "Normal",
+      "reason": "ScalingReplicaSet",
+      "object": "Deployment/agent",
+      "message": "Scaled up replica set agent-554c9df758 from 0 to 1",
+      "count": 1,
+      "first_seen": "2026-11-03T02:41:29Z",
+      "last_seen": "2026-11-03T02:41:29Z"
     },
     {
       "type": "Normal",
       "reason": "SuccessfulCreate",
-      "object": "ReplicaSet/agent-7c8b696666",
-      "message": "Created pod: agent-7c8b696666-n4tdz",
+      "object": "ReplicaSet/agent-554c9df758",
+      "message": "Created pod: agent-554c9df758-rflzs",
       "count": 1,
-      "first_seen": "2026-11-02T00:23:10Z",
-      "last_seen": "2026-11-02T00:23:10Z"
+      "first_seen": "2026-11-03T02:41:29Z",
+      "last_seen": "2026-11-03T02:41:29Z"
+    },
+    {
+      "type": "Normal",
+      "reason": "Scheduled",
+      "object": "Pod/agent-554c9df758-rflzs",
+      "message": "Successfully assigned demo/agent-554c9df758-rflzs to tidewatch-lab-control-plane",
+      "count": 1,
+      "first_seen": "2026-11-03T02:41:29.201993Z",
+      "last_seen": "2026-11-03T02:41:29.201993Z"
     },
     {
       "type": "Normal",
       "reason": "Pulled",
-      "object": "Pod/agent-7c8b696666-n4tdz",
-      "message": "Container image \"tidewatch-agent:0.1.0\" already present on machine and can be accessed by the pod",
+      "object": "Pod/agent-554c9df758-rflzs",
+      "message": "Container image \"tidewatch-agent:0.2.0\" already present on machine and can be accessed by the pod",
       "count": 4,
-      "first_seen": "2026-11-02T00:23:11Z",
-      "last_seen": "2026-11-02T00:23:52Z"
+      "first_seen": "2026-11-03T02:41:29Z",
+      "last_seen": "2026-11-03T02:42:10Z"
     },
     {
       "type": "Normal",
       "reason": "Created",
-      "object": "Pod/agent-7c8b696666-n4tdz",
+      "object": "Pod/agent-554c9df758-rflzs",
       "message": "Container created",
       "count": 4,
-      "first_seen": "2026-11-02T00:23:11Z",
-      "last_seen": "2026-11-02T00:23:52Z"
+      "first_seen": "2026-11-03T02:41:29Z",
+      "last_seen": "2026-11-03T02:42:10Z"
     },
     {
       "type": "Normal",
       "reason": "Started",
-      "object": "Pod/agent-7c8b696666-n4tdz",
+      "object": "Pod/agent-554c9df758-rflzs",
       "message": "Container started",
       "count": 4,
-      "first_seen": "2026-11-02T00:23:11Z",
-      "last_seen": "2026-11-02T00:23:52Z"
+      "first_seen": "2026-11-03T02:41:29Z",
+      "last_seen": "2026-11-03T02:42:10Z"
     },
     {
       "type": "Warning",
       "reason": "BackOff",
-      "object": "Pod/agent-7c8b696666-n4tdz",
-      "message": "Back-off restarting failed container agent in pod agent-7c8b696666-n4tdz_demo(1500e17b-b182-43b3-8124-e78c59d1c675)",
+      "object": "Pod/agent-554c9df758-rflzs",
+      "message": "Back-off restarting failed container agent in pod agent-554c9df758-rflzs_demo(aa3c0014-65f6-4f7f-88b7-b6d9c39b7fd8)",
       "count": 6,
-      "first_seen": "2026-11-02T00:23:16Z",
-      "last_seen": "2026-11-02T00:24:01Z"
+      "first_seen": "2026-11-03T02:41:34Z",
+      "last_seen": "2026-11-03T02:42:19Z"
     }
   ]
 }

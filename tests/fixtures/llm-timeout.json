@@ -1,0 +1,336 @@
+{
+  "schema_version": "1",
+  "collected_at": "2026-11-03T02:47:50.213547Z",
+  "context": "kind-tidewatch-lab",
+  "namespace": "demo",
+  "selector": null,
+  "log_lines": 50,
+  "log_since_seconds": 3600,
+  "pods": [
+    {
+      "name": "agent-fbdb89b9f-wvh2q",
+      "phase": "Running",
+      "owner": "ReplicaSet/agent-fbdb89b9f",
+      "labels": {
+        "app": "agent",
+        "pod-template-hash": "fbdb89b9f"
+      },
+      "conditions": {
+        "PodReadyToStartContainers": "True",
+        "Initialized": "True",
+        "Ready": "True",
+        "ContainersReady": "True",
+        "PodScheduled": "True"
+      },
+      "containers": [
+        {
+          "name": "agent",
+          "image": "docker.io/library/tidewatch-agent:0.2.0",
+          "ready": true,
+          "restart_count": 0,
+          "state": {
+            "state": "running",
+            "reason": null,
+            "message": null,
+            "exit_code": null
+          },
+          "last_state": null,
+          "previous_logs": [],
+          "recent_logs": [
+            "2026-11-03T02:46:45.887344542Z ERROR upstream model call failed: connection failed: [Errno 111] Connection refused",
+            "2026-11-03T02:46:45.989319542Z INFO:     Started server process [1]",
+            "2026-11-03T02:46:45.989337584Z INFO:     Waiting for application startup.",
+            "2026-11-03T02:46:45.989622917Z INFO:     Application startup complete.",
+            "2026-11-03T02:46:45.989750875Z INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)",
+            "2026-11-03T02:46:49.157324377Z INFO:     10.244.0.1:50784 - \"GET /health HTTP/1.1\" 200 OK",
+            "2026-11-03T02:46:53.800468879Z INFO:     10.244.0.1:50800 - \"GET /health HTTP/1.1\" 200 OK",
+            "2026-11-03T02:46:54.141225171Z INFO:     10.244.0.1:50816 - \"GET /health HTTP/1.1\" 200 OK",
+            "2026-11-03T02:46:55.891364963Z ERROR upstream model call failed: connection failed: [Errno 111] Connection refused",
+            "2026-11-03T02:46:59.139025840Z INFO:     10.244.0.1:50814 - \"GET /health HTTP/1.1\" 200 OK",
+            "2026-11-03T02:47:03.799691301Z INFO:     10.244.0.1:50826 - \"GET /health HTTP/1.1\" 200 OK",
+            "2026-11-03T02:47:04.138980634Z INFO:     10.244.0.1:50842 - \"GET /health HTTP/1.1\" 200 OK",
+            "2026-11-03T02:47:09.142640803Z INFO:     10.244.0.1:53460 - \"GET /health HTTP/1.1\" 200 OK",
+            "2026-11-03T02:47:10.904215262Z ERROR upstream model call failed: timed out after 5s",
+            "2026-11-03T02:47:13.801119847Z INFO:     10.244.0.1:53464 - \"GET /health HTTP/1.1\" 200 OK",
+            "2026-11-03T02:47:14.138884375Z INFO:     10.244.0.1:53466 - \"GET /health HTTP/1.1\" 200 OK",
+            "2026-11-03T02:47:19.139566002Z INFO:     10.244.0.1:40032 - \"GET /health HTTP/1.1\" 200 OK",
+            "2026-11-03T02:47:23.797977671Z INFO:     10.244.0.1:40034 - \"GET /health HTTP/1.1\" 200 OK",
+            "2026-11-03T02:47:24.139493921Z INFO:     10.244.0.1:40046 - \"GET /health HTTP/1.1\" 200 OK",
+            "2026-11-03T02:47:25.909485005Z ERROR upstream model call failed: timed out after 5s",
+            "2026-11-03T02:47:29.138639673Z INFO:     10.244.0.1:53074 - \"GET /health HTTP/1.1\" 200 OK",
+            "2026-11-03T02:47:33.798803259Z INFO:     10.244.0.1:53078 - \"GET /health HTTP/1.1\" 200 OK",
+            "2026-11-03T02:47:34.137141176Z INFO:     10.244.0.1:53088 - \"GET /health HTTP/1.1\" 200 OK",
+            "2026-11-03T02:47:39.137556886Z INFO:     10.244.0.1:52118 - \"GET /health HTTP/1.1\" 200 OK",
+            "2026-11-03T02:47:40.918288846Z ERROR upstream model call failed: timed out after 5s",
+            "2026-11-03T02:47:43.801124389Z INFO:     10.244.0.1:52120 - \"GET /health HTTP/1.1\" 200 OK",
+            "2026-11-03T02:47:44.137351250Z INFO:     10.244.0.1:52130 - \"GET /health HTTP/1.1\" 200 OK",
+            "2026-11-03T02:47:49.138611419Z INFO:     10.244.0.1:41372 - \"GET /health HTTP/1.1\" 200 OK"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "model-7fb5759bcd-lc2wj",
+      "phase": "Running",
+      "owner": "ReplicaSet/model-7fb5759bcd",
+      "labels": {
+        "app": "model",
+        "pod-template-hash": "7fb5759bcd"
+      },
+      "conditions": {
+        "PodReadyToStartContainers": "True",
+        "Initialized": "True",
+        "Ready": "True",
+        "ContainersReady": "True",
+        "PodScheduled": "True"
+      },
+      "containers": [
+        {
+          "name": "model",
+          "image": "docker.io/library/tidewatch-agent:0.2.0",
+          "ready": true,
+          "restart_count": 0,
+          "state": {
+            "state": "running",
+            "reason": null,
+            "message": null,
+            "exit_code": null
+          },
+          "last_state": null,
+          "previous_logs": [],
+          "recent_logs": [
+            "2026-11-03T02:46:52.352384253Z INFO:     Started server process [1]",
+            "2026-11-03T02:46:52.352418128Z INFO:     Waiting for application startup.",
+            "2026-11-03T02:46:52.352746962Z INFO:     Application startup complete.",
+            "2026-11-03T02:46:52.352922962Z INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)"
+          ]
+        }
+      ]
+    }
+  ],
+  "deployments": [
+    {
+      "name": "agent",
+      "replicas": 1,
+      "ready_replicas": 1,
+      "available_replicas": 1,
+      "containers": [
+        {
+          "name": "agent",
+          "image": "tidewatch-agent:0.2.0",
+          "memory_request": "64Mi",
+          "memory_limit": "128Mi",
+          "cpu_request": "50m",
+          "cpu_limit": "250m"
+        }
+      ]
+    },
+    {
+      "name": "model",
+      "replicas": 1,
+      "ready_replicas": 1,
+      "available_replicas": 1,
+      "containers": [
+        {
+          "name": "model",
+          "image": "tidewatch-agent:0.2.0",
+          "memory_request": "64Mi",
+          "memory_limit": "128Mi",
+          "cpu_request": "50m",
+          "cpu_limit": "250m"
+        }
+      ]
+    }
+  ],
+  "events": [
+    {
+      "type": "Normal",
+      "reason": "ScalingReplicaSet",
+      "object": "Deployment/agent",
+      "message": "Scaled up replica set agent-fbdb89b9f from 0 to 1",
+      "count": 1,
+      "first_seen": "2026-11-03T02:46:43Z",
+      "last_seen": "2026-11-03T02:46:43Z"
+    },
+    {
+      "type": "Normal",
+      "reason": "ScalingReplicaSet",
+      "object": "Deployment/model",
+      "message": "Scaled up replica set model-7c868dfc49 from 0 to 1",
+      "count": 1,
+      "first_seen": "2026-11-03T02:46:43Z",
+      "last_seen": "2026-11-03T02:46:43Z"
+    },
+    {
+      "type": "Normal",
+      "reason": "Pulled",
+      "object": "Pod/agent-fbdb89b9f-wvh2q",
+      "message": "Container image \"tidewatch-agent:0.2.0\" already present on machine and can be accessed by the pod",
+      "count": 1,
+      "first_seen": "2026-11-03T02:46:43Z",
+      "last_seen": "2026-11-03T02:46:43Z"
+    },
+    {
+      "type": "Normal",
+      "reason": "Created",
+      "object": "Pod/agent-fbdb89b9f-wvh2q",
+      "message": "Container created",
+      "count": 1,
+      "first_seen": "2026-11-03T02:46:43Z",
+      "last_seen": "2026-11-03T02:46:43Z"
+    },
+    {
+      "type": "Normal",
+      "reason": "Started",
+      "object": "Pod/agent-fbdb89b9f-wvh2q",
+      "message": "Container started",
+      "count": 1,
+      "first_seen": "2026-11-03T02:46:43Z",
+      "last_seen": "2026-11-03T02:46:43Z"
+    },
+    {
+      "type": "Normal",
+      "reason": "Pulled",
+      "object": "Pod/model-7c868dfc49-84hfp",
+      "message": "Container image \"tidewatch-agent:0.2.0\" already present on machine and can be accessed by the pod",
+      "count": 1,
+      "first_seen": "2026-11-03T02:46:43Z",
+      "last_seen": "2026-11-03T02:46:43Z"
+    },
+    {
+      "type": "Normal",
+      "reason": "Created",
+      "object": "Pod/model-7c868dfc49-84hfp",
+      "message": "Container created",
+      "count": 1,
+      "first_seen": "2026-11-03T02:46:43Z",
+      "last_seen": "2026-11-03T02:46:43Z"
+    },
+    {
+      "type": "Normal",
+      "reason": "Started",
+      "object": "Pod/model-7c868dfc49-84hfp",
+      "message": "Container started",
+      "count": 1,
+      "first_seen": "2026-11-03T02:46:43Z",
+      "last_seen": "2026-11-03T02:46:43Z"
+    },
+    {
+      "type": "Normal",
+      "reason": "SuccessfulCreate",
+      "object": "ReplicaSet/agent-fbdb89b9f",
+      "message": "Created pod: agent-fbdb89b9f-wvh2q",
+      "count": 1,
+      "first_seen": "2026-11-03T02:46:43Z",
+      "last_seen": "2026-11-03T02:46:43Z"
+    },
+    {
+      "type": "Normal",
+      "reason": "SuccessfulCreate",
+      "object": "ReplicaSet/model-7c868dfc49",
+      "message": "Created pod: model-7c868dfc49-84hfp",
+      "count": 1,
+      "first_seen": "2026-11-03T02:46:43Z",
+      "last_seen": "2026-11-03T02:46:43Z"
+    },
+    {
+      "type": "Normal",
+      "reason": "Scheduled",
+      "object": "Pod/agent-fbdb89b9f-wvh2q",
+      "message": "Successfully assigned demo/agent-fbdb89b9f-wvh2q to tidewatch-lab-control-plane",
+      "count": 1,
+      "first_seen": "2026-11-03T02:46:43.482395Z",
+      "last_seen": "2026-11-03T02:46:43.482395Z"
+    },
+    {
+      "type": "Normal",
+      "reason": "Scheduled",
+      "object": "Pod/model-7c868dfc49-84hfp",
+      "message": "Successfully assigned demo/model-7c868dfc49-84hfp to tidewatch-lab-control-plane",
+      "count": 1,
+      "first_seen": "2026-11-03T02:46:43.487765Z",
+      "last_seen": "2026-11-03T02:46:43.487765Z"
+    },
+    {
+      "type": "Normal",
+      "reason": "ScalingReplicaSet",
+      "object": "Deployment/model",
+      "message": "Scaled down replica set model-7c868dfc49 from 1 to 0",
+      "count": 1,
+      "first_seen": "2026-11-03T02:46:49Z",
+      "last_seen": "2026-11-03T02:46:49Z"
+    },
+    {
+      "type": "Normal",
+      "reason": "ScalingReplicaSet",
+      "object": "Deployment/model",
+      "message": "Scaled up replica set model-7fb5759bcd from 0 to 1",
+      "count": 1,
+      "first_seen": "2026-11-03T02:46:49Z",
+      "last_seen": "2026-11-03T02:46:49Z"
+    },
+    {
+      "type": "Normal",
+      "reason": "Killing",
+      "object": "Pod/model-7c868dfc49-84hfp",
+      "message": "Stopping container model",
+      "count": 1,
+      "first_seen": "2026-11-03T02:46:49Z",
+      "last_seen": "2026-11-03T02:46:49Z"
+    },
+    {
+      "type": "Normal",
+      "reason": "SuccessfulDelete",
+      "object": "ReplicaSet/model-7c868dfc49",
+      "message": "Deleted pod: model-7c868dfc49-84hfp",
+      "count": 1,
+      "first_seen": "2026-11-03T02:46:49Z",
+      "last_seen": "2026-11-03T02:46:49Z"
+    },
+    {
+      "type": "Normal",
+      "reason": "SuccessfulCreate",
+      "object": "ReplicaSet/model-7fb5759bcd",
+      "message": "Created pod: model-7fb5759bcd-lc2wj",
+      "count": 1,
+      "first_seen": "2026-11-03T02:46:49Z",
+      "last_seen": "2026-11-03T02:46:49Z"
+    },
+    {
+      "type": "Normal",
+      "reason": "Scheduled",
+      "object": "Pod/model-7fb5759bcd-lc2wj",
+      "message": "Successfully assigned demo/model-7fb5759bcd-lc2wj to tidewatch-lab-control-plane",
+      "count": 1,
+      "first_seen": "2026-11-03T02:46:49.842012Z",
+      "last_seen": "2026-11-03T02:46:49.842012Z"
+    },
+    {
+      "type": "Normal",
+      "reason": "Pulled",
+      "object": "Pod/model-7fb5759bcd-lc2wj",
+      "message": "Container image \"tidewatch-agent:0.2.0\" already present on machine and can be accessed by the pod",
+      "count": 1,
+      "first_seen": "2026-11-03T02:46:50Z",
+      "last_seen": "2026-11-03T02:46:50Z"
+    },
+    {
+      "type": "Normal",
+      "reason": "Created",
+      "object": "Pod/model-7fb5759bcd-lc2wj",
+      "message": "Container created",
+      "count": 1,
+      "first_seen": "2026-11-03T02:46:50Z",
+      "last_seen": "2026-11-03T02:46:50Z"
+    },
+    {
+      "type": "Normal",
+      "reason": "Started",
+      "object": "Pod/model-7fb5759bcd-lc2wj",
+      "message": "Container started",
+      "count": 1,
+      "first_seen": "2026-11-03T02:46:50Z",
+      "last_seen": "2026-11-03T02:46:50Z"
+    }
+  ]
+}
