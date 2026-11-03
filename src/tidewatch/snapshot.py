@@ -3,10 +3,12 @@
 It holds only what diagnosis needs. Secrets and environment variable values are never collected.
 """
 
+import json
 from datetime import datetime
+from pathlib import Path
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 
 SCHEMA_VERSION = "1"
 
@@ -73,3 +75,30 @@ class Snapshot(BaseModel):
     pods: list[Pod] = Field(default_factory=list)
     deployments: list[Deployment] = Field(default_factory=list)
     events: list[Event] = Field(default_factory=list)
+
+
+class SnapshotLoadError(Exception):
+    """A snapshot file can't be used: unreadable, wrong version, invalid, or wrong namespace."""
+
+
+def load(path: str | Path, namespace: str | None = None) -> Snapshot:
+    """Load a saved snapshot. The schema_version is checked before full validation."""
+    try:
+        raw = json.loads(Path(path).read_text())
+    except (OSError, ValueError) as exc:
+        raise SnapshotLoadError(f"cannot read snapshot {path}: {exc}") from None
+    version = raw.get("schema_version") if isinstance(raw, dict) else None
+    if version != SCHEMA_VERSION:
+        raise SnapshotLoadError(
+            f"unsupported schema_version {version!r} in {path} "
+            f"(this Tidewatch reads {SCHEMA_VERSION!r})"
+        )
+    try:
+        snapshot = Snapshot.model_validate(raw)
+    except ValidationError as exc:
+        raise SnapshotLoadError(f"invalid snapshot {path}: {exc.error_count()} errors") from None
+    if namespace is not None and snapshot.namespace != namespace:
+        raise SnapshotLoadError(
+            f"snapshot {path} is for namespace {snapshot.namespace!r}, not {namespace!r}"
+        )
+    return snapshot
