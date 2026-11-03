@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from fakes import T0
 
 from tidewatch.snapshot import (
@@ -59,3 +61,44 @@ def test_snapshot_has_schema_version_and_no_secret_fields():
     for model in models:
         field_names |= set(model.model_fields)
     assert not field_names & {"env", "secrets", "data", "value", "string_data"}
+
+
+def test_load_rejects_unsupported_schema_version(tmp_path):
+    import json
+
+    import pytest
+
+    from tidewatch.snapshot import SnapshotLoadError, load
+
+    path = tmp_path / "v2.json"
+    path.write_text(json.dumps({"schema_version": "2", "resources": {"different": "shape"}}))
+    with pytest.raises(SnapshotLoadError, match="unsupported schema_version '2'"):
+        load(path)
+
+
+def test_load_rejects_namespace_mismatch():
+    import pytest
+
+    from tidewatch.snapshot import SnapshotLoadError, load
+
+    path = Path(__file__).resolve().parent / "fixtures" / "healthy.json"
+    with pytest.raises(SnapshotLoadError, match="is for namespace 'demo', not 'prod'"):
+        load(path, namespace="prod")
+
+
+def test_load_reads_a_fixture():
+    from tidewatch.snapshot import load
+
+    snap = load(Path(__file__).resolve().parent / "fixtures" / "memory.json", namespace="demo")
+    assert (snap.namespace, snap.schema_version) == ("demo", "1")
+
+
+def test_load_rejects_invalid_v1_snapshot(tmp_path):
+    import pytest
+
+    from tidewatch.snapshot import SnapshotLoadError, load
+
+    path = tmp_path / "bad.json"
+    path.write_text('{"schema_version": "1", "namespace": "demo", "pods": "not a list"}')
+    with pytest.raises(SnapshotLoadError, match="invalid snapshot"):
+        load(path)

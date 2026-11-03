@@ -60,6 +60,7 @@ It is built with Claude Code as a pair programmer, in small reviewed slices, aga
 - After a block, find where the term is (file and line numbers only): `scripts/check-private-terms.sh find <file>`
 - Install: `uv sync`. Run the CLI: `uv run tidewatch version`
 - Snapshot a namespace (read-only): `uv run tidewatch collect --context kind-tidewatch-lab -n demo -o snapshot.json`
+- Diagnose (ADR 0003): `uv run tidewatch scan --context kind-tidewatch-lab -n demo [--json] [-o report.json]`, or offline from a saved snapshot: `uv run tidewatch scan --from tests/fixtures/memory.json`
 - Re-capture test fixtures from the lab (about 6 min; rebuilds namespace demo each time): `lab/capture-fixtures.sh [name...]`
 - Test: `uv run pytest`. Lint and format: `uv run ruff check .` and `uv run ruff format --check .`
 - Prove the guard tests can fail against a broken copy (never edit the real guard): `TIDEWATCH_GUARD_SCRIPT=<copy> uv run pytest tests/test_private_terms_guard.py`
