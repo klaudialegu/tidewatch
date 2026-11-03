@@ -3,7 +3,8 @@
 # Safety: every kubectl call goes through k(), which always passes --context kind-tidewatch-lab,
 # and nothing happens unless the tidewatch-lab cluster exists.
 #
-#   lab/patient.sh up       build the image, load it into kind, create the Secret, apply, wait
+#   lab/patient.sh up       build the image, load it into kind, create the Secret, apply the
+#                           kustomization (agent + fake model), wait for both
 #   lab/patient.sh status   pods and service in demo
 #   lab/patient.sh check    /health and /chat answer; logs don't contain the API key
 #   lab/patient.sh down     delete namespace demo
@@ -12,7 +13,7 @@ set -euo pipefail
 CLUSTER="tidewatch-lab"
 CONTEXT="kind-${CLUSTER}"
 NS="demo"
-IMAGE="tidewatch-agent:0.1.0"
+IMAGE="tidewatch-agent:0.2.0"
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 usage() {
@@ -53,7 +54,8 @@ case "$1" in
         --from-env-file=<(printf 'API_KEY=%s\n' "$(openssl rand -hex 16)") >/dev/null
       echo "secret/agent-secret created (random fake value, not shown)"
     fi
-    k apply -f "${HERE}/k8s/deployment.yaml" -f "${HERE}/k8s/service.yaml"
+    k apply -k "${HERE}/k8s"
+    k -n "${NS}" rollout status deployment/model --timeout=120s
     k -n "${NS}" rollout status deployment/agent --timeout=120s
     ;;
   status)
@@ -82,7 +84,7 @@ case "$1" in
     echo "health: ${health}"
     chat=$(curl -fsS -X POST -H 'Content-Type: application/json' \
       -d '{"message":"ping"}' "http://127.0.0.1:${port}/chat") || fail "/chat request failed"
-    [[ "${chat}" == '{"reply":"echo: ping"}' ]] || fail "unexpected /chat reply: ${chat}"
+    [[ "${chat}" == '{"reply":"model: ping"}' ]] || fail "unexpected /chat reply: ${chat}"
     echo "chat:   ${chat}"
     key=$(k -n "${NS}" get secret agent-secret -o jsonpath='{.data.API_KEY}' | base64 -d)
     [[ -n "${key}" ]] || fail "could not read the API key from agent-secret"

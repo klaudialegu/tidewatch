@@ -1,0 +1,16 @@
+# Lab scenario: one change on top of the healthy base.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../k8s
+patches:
+  - target:
+      kind: Deployment
+      name: model
+    patch: |-
+      - op: test
+        path: /spec/template/spec/containers/0/env/0/name
+        value: MODEL_MODE
+      - op: replace
+        path: /spec/template/spec/containers/0/env/0/value
+        value: rate-limit

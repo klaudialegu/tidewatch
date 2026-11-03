@@ -8,5 +8,8 @@ patches:
       kind: Deployment
       name: agent
     patch: |-
+      - op: test
+        path: /spec/template/spec/containers/0/env/0/name
+        value: API_KEY
       - op: remove
-        path: /spec/template/spec/containers/0/env
+        path: /spec/template/spec/containers/0/env/0
