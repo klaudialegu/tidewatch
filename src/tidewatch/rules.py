@@ -259,10 +259,28 @@ RATE = re.compile(
 )
 TIMEOUT = re.compile(r"\btimed\s+out\b|\btimeout\b|\bdeadline\s+exceeded\b", re.IGNORECASE)
 # Rate-limit and timeout words also show up in harmless config lines ("timeout=30s, rate limit
-# 60/min"), so those two rules only count a line that also says a call went wrong.
+# 60/min, log_level=error"). For those two rules a hit followed by a number is a setting, not an
+# event, and the line must also say a call went wrong (a failure word or a 4xx/5xx status).
+SETTING_VALUE = re.compile(r"\s*[=:]?\s*\d")
 FAILED_CALL = re.compile(
-    FAILURE.pattern + r"|\b(?:exceeded|timed\s+out|too\s+many\s+requests)\b", re.IGNORECASE
+    FAILURE.pattern
+    + r"|\b(?:exceeded|timed\s+out|too\s+many\s+requests|rate[\s_-]?limited|throttled)\b"
+    + r"|"
+    + STATUS
+    + r"[45]\d\d\b",
+    re.IGNORECASE,
 )
+
+
+def reports_event(pattern: re.Pattern, message: str) -> bool:
+    """True if a hit of `pattern` is an event, not a setting like `timeout=30s`."""
+    return any(not SETTING_VALUE.match(message, hit.end()) for hit in pattern.finditer(message))
+
+
+def is_hit(pattern: re.Pattern, message: str, needs_failure: bool) -> bool:
+    if not needs_failure:
+        return bool(pattern.search(message))
+    return reports_event(pattern, message) and bool(FAILED_CALL.search(message))
 
 
 @dataclass(frozen=True)
@@ -319,12 +337,7 @@ def llm_findings(
     findings = []
     for c in pod.containers:
         upstream = upstream_lines(c)
-        matched = [
-            line
-            for line in upstream
-            if pattern.search(line.message)
-            and (not needs_failure or FAILED_CALL.search(line.message))
-        ]
+        matched = [line for line in upstream if is_hit(pattern, line.message, needs_failure)]
         if not matched:
             continue
         latest = upstream[-1]

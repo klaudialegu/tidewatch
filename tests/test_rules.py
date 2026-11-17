@@ -1,3 +1,5 @@
+import time
+
 import pytest
 from snapshots import (
     cstatus,
@@ -313,12 +315,24 @@ def test_llm_status_codes_in_upstream_ports_are_not_status_codes():
 
 
 def test_llm_config_lines_with_timeout_or_rate_limit_words_are_not_failures():
-    pod = agent_with(
+    for config in (
         "INFO model client configured: timeout=30s, rate limit 60/min",
-        "INFO upstream model ok",
-    )
-    for fn in LLM_RULES:
-        assert run(fn, pod) == [], fn.__name__
+        "INFO model client config: timeout=30s log_level=error",
+        "INFO model client config: timeout: 30 rate_limit=60/min retry_on=error",
+        "INFO model client retries on timeout and on rate limits",  # words, but no failure
+    ):
+        pod = agent_with(config, "INFO upstream model ok")
+        for fn in LLM_RULES:
+            assert run(fn, pod) == [], (fn.__name__, config)
+
+
+def test_llm_rate_limit_rule_matches_without_an_extra_failure_word():
+    for message in (
+        "WARN upstream returned status 429",
+        "WARN model provider rate limited, retrying in 2s",
+    ):
+        (f,) = run(llm_upstream_rate_limited, agent_with(message))
+        assert f.rule_id == "llm-upstream-rate-limited", message
 
 
 def test_llm_rule_downgrades_when_latest_upstream_line_is_ok():
@@ -402,3 +416,19 @@ def test_mask_hides_json_quoted_keys_and_basic_auth():
     )
     assert mask_secrets("Authorization: Basic dXNlcjpwYXNz") == "Authorization: Basic ***"
     assert mask_secrets("basic health check ok") == "basic health check ok"
+    for line, masked in (
+        ('{"access_token": "abcd1234efgh"}', '{"access_token": "***"}'),
+        ("client_secret: abcd1234efgh", "client_secret: ***"),
+        ("db_password=hunter2xyz", "db_password=***"),
+        ("OPENAI_API_KEY=abc", "OPENAI_API_KEY=***"),
+    ):
+        assert mask_secrets(line) == masked
+    for kept in ("max_tokens=1000", "usage tokens: 5"):
+        assert mask_secrets(kept) == kept
+
+
+def test_mask_time_stays_linear_on_huge_lines():
+    start = time.perf_counter()
+    for huge in ("a" * 200_000, "a-" * 100_000, "x" * 199_999 + "1"):
+        mask_secrets(huge)
+    assert time.perf_counter() - start < 1.0  # the old lookahead took minutes here

@@ -18,17 +18,24 @@ _MASKS = [
     (re.compile(r"\b(sk|pk|rk)-[A-Za-z0-9_\-]{6,}"), r"\1-***"),
     (re.compile(r"\b(Bearer)\s+\S+", re.IGNORECASE), r"\1 ***"),
     (re.compile(r"\b(Authorization\s*[=:]\s*Basic)\s+\S+", re.IGNORECASE), r"\1 ***"),
-    (  # key=value, key: value, and JSON-quoted "key": "value"
+    (  # key=value, key: value, JSON-quoted "key": "value"; prefixed names like client_secret
         re.compile(
-            r"\b(api[_-]?key|token|secret|password)([\"']?\s*[=:]\s*[\"']?)[^\s\"',}]+",
+            r"\b([A-Za-z0-9_-]{0,30}?(?:api[_-]?key|token|secret|password))"
+            r"([\"']?\s*[=:]\s*[\"']?)[^\s\"',}]+",
             re.IGNORECASE,
         ),
         r"\1\2***",
     ),
     # A long run with both letters and digits; no "/", "-" or "." so URLs, hostnames and file
-    # paths keep their (short) segments.
-    (re.compile(r"(?=[A-Za-z0-9_+=]*\d)(?=[A-Za-z0-9_+=]*[A-Za-z])[A-Za-z0-9_+=]{24,}"), "***"),
+    # paths keep their (short) segments. Checked in a function so time stays linear in length.
+    (re.compile(r"[A-Za-z0-9_+=]{24,}"), lambda m: _mask_if_mixed(m.group(0))),
 ]
+
+
+def _mask_if_mixed(run: str) -> str:
+    has_digit = any(ch.isdigit() for ch in run)
+    has_letter = any(ch.isalpha() for ch in run)
+    return "***" if has_digit and has_letter else run
 
 
 def mask_secrets(line: str) -> str:
