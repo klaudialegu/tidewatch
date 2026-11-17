@@ -246,6 +246,9 @@ def test_llm_auth_rule_matches_common_wordings():
         "openai-style API error: Error code: 401 - Incorrect API key provided",
         "provider AuthenticationError: invalid api key",
         "llm call failed: status code 403 permission denied",
+        # the key wording alone, with no status code, "Unauthorized" or other auth word
+        "upstream model call failed: invalid API key",
+        "provider rejected the request: Incorrect API key provided",
     ):
         (f,) = run(llm_upstream_auth_failed, agent_with(message))
         assert (f.rule_id, f.severity) == ("llm-upstream-auth-failed", "critical"), message
@@ -298,6 +301,15 @@ def test_llm_rules_ignore_access_log_lines_with_401_or_429_in_ports():
     )
     for fn in LLM_RULES:
         assert run(fn, pod) == [], fn.__name__
+
+
+def test_llm_status_codes_in_upstream_ports_are_not_status_codes():
+    pod = agent_with(
+        "ERROR upstream model call failed: connection refused by model.demo.svc:8401",
+        "ERROR upstream model call failed: connection refused by 10.96.0.12:9429",
+    )
+    assert run(llm_upstream_auth_failed, pod) == []
+    assert run(llm_upstream_rate_limited, pod) == []
 
 
 def test_llm_rule_downgrades_when_latest_upstream_line_is_ok():
