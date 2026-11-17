@@ -28,8 +28,10 @@ def _mask_if_mixed(m: re.Match) -> str:
     # Provider request IDs stay visible: they're what the provider's support asks for first.
     # "_" and "=" are token characters, so `request_id=req_...` is one run: check its value part.
     # "-" isn't, so `chatcmpl-...` starts a new run: check the text just before it.
+    # Image digests (`@sha256:<hex>`) aren't secrets; support needs them to tell which image ran.
     value = run.rpartition("=")[2]
-    if value.startswith("req_") or m.string[max(0, m.start() - 9) : m.start()] == "chatcmpl-":
+    before = m.string[max(0, m.start() - 9) : m.start()]
+    if value.startswith("req_") or before == "chatcmpl-" or before.endswith("sha256:"):
         return run
     has_digit = any(ch.isdigit() for ch in run)
     has_letter = any(ch.isalpha() for ch in run)
