@@ -1,7 +1,7 @@
 # Fake test value (base64 of "fake-key-123") in an earlier commit; the line now carries gitleaks:allow.
-049617a6a7b2c4619915975f565e78488e31b01c:tests/test_lab_scripts.py:generic-api-key:73
+0c198c8ef2ca2e80738e6aa543788599b6a040bb:tests/test_lab_scripts.py:generic-api-key:73
 # Fake test value (sk-abc123SECRET99, a made-up key) in an earlier commit; the line now carries gitleaks:allow.
-7ab1e2aaa008f8b00a2308199ba3dd5be4d66a9a:tests/test_rules.py:generic-api-key:319
+f6c97046b99af4dd58fa004afff8163c3c259383:tests/test_rules.py:generic-api-key:319
 # Made-up values in the key-mask test (round 2 review fixes); the lines now carry gitleaks:allow.
-94828d99f3bc7676c12dea1a301e5eda2b4b2271:tests/test_rules.py:generic-api-key:420
-94828d99f3bc7676c12dea1a301e5eda2b4b2271:tests/test_rules.py:generic-api-key:421
+57dc1e6f0e5ec07b53c7d8605bbe99eb8427d4cc:tests/test_rules.py:generic-api-key:420
+57dc1e6f0e5ec07b53c7d8605bbe99eb8427d4cc:tests/test_rules.py:generic-api-key:421
