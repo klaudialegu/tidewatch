@@ -431,8 +431,12 @@ def test_mask_keeps_provider_request_ids_visible():
     for kept in (
         "upstream 401, request id req_01HXYZABCDEFGHJKMNPQRS12",
         "upstream timed out (id chatcmpl-9AbCdEfGhIjKlMnOpQrStUvWx12)",
+        "upstream 429 request_id=req_01HXYZABCDEFGHJKMNPQRS12",
+        "upstream 429 request-id=req_01HXYZABCDEFGHJKMNPQRS12",
     ):
         assert mask_secrets(kept) == kept
+    masked_key = "token=req_01HXYZABCDEFGHJKMNPQRS12"  # gitleaks:allow (made-up value)
+    assert mask_secrets(masked_key) == "token=***"
     assert mask_secrets("key sk-proj_01HXYZABCDEFGHJKMNPQRS12") == "key sk-***"
 
 

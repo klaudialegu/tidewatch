@@ -31,14 +31,14 @@ _MASKS = [
     (re.compile(r"[A-Za-z0-9_+=]{24,}"), lambda m: _mask_if_mixed(m)),
 ]
 
-# Provider request IDs stay visible: they're what the provider's support asks for first.
-_REQUEST_ID_PREFIXES = ("req_", "chatcmpl-")
-
 
 def _mask_if_mixed(m: re.Match) -> str:
     run = m.group(0)
-    before = m.string[max(0, m.start() - 9) : m.start()]
-    if run.startswith("req_") or before.endswith(_REQUEST_ID_PREFIXES):
+    # Provider request IDs stay visible: they're what the provider's support asks for first.
+    # "_" and "=" are token characters, so `request_id=req_...` is one run: check its value part.
+    # "-" isn't, so `chatcmpl-...` starts a new run: check the text just before it.
+    value = run.rpartition("=")[2]
+    if value.startswith("req_") or m.string[max(0, m.start() - 9) : m.start()] == "chatcmpl-":
         return run
     has_digit = any(ch.isdigit() for ch in run)
     has_letter = any(ch.isalpha() for ch in run)
