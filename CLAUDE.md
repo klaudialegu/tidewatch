@@ -36,7 +36,7 @@ It is built with Claude Code as a pair programmer, in small reviewed slices, aga
 - **Private terms guard:** the gitignored `.private-terms` lists words that must never be committed. `.githooks/` blocks any commit (changes, file names, branch, message) or push that contains one, case-insensitively, and a missing list blocks everything. Enable it in every clone: `git config core.hooksPath .githooks`. Never commit with `--no-verify`.
 - **Lab data only:** fixtures and examples come from the local tidewatch-lab cluster. Never real company clusters, customer logs, kubeconfigs or tokens.
 - **Read-only against clusters:** Tidewatch only gets, lists and reads logs, enforced by a test. Cluster changes happen only in the lab scripts, against tidewatch-lab.
-- **The repo stays private until redaction exists** (the "Later" block in docs/PLAN.md).
+- **Going public needs minimal redaction** (ADR 0005), a clean full-history privacy check and my explicit OK (the "Before going public" step in docs/PLAN.md).
 - Secrets (API keys, tokens) only in .env or the macOS keychain: never hardcoded, printed or logged. Fake values in the lab only.
 - Personal context lives in the gitignored CLAUDE.local.md; never copy anything from it into a committed file.
 
