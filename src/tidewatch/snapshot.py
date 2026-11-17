@@ -2,8 +2,9 @@
 
 It holds only what diagnosis needs. Secrets and environment variable values are never collected.
 Logs are: a bounded tail (line count and time window) of the previous and current run of each
-container. Logs can contain anything an app prints, which is why snapshots and reports must not be
-shared outside the team until redaction exists (ADR 0003, ADR 0004).
+container. Every log line and free-text message is masked when the model is built (ADR 0005), so
+a snapshot written by collect, and one loaded from an older file, never holds key-like tokens.
+Masking is pattern-based: names, hostnames and image references stay as they are.
 
 Schema policy (ADR 0004): adding an optional field keeps schema_version "1"; renaming, removing or
 changing the meaning of a field needs "2".
@@ -14,7 +15,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Literal
 
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, Field, ValidationError, field_validator
+
+from tidewatch.masking import mask_secrets
 
 SCHEMA_VERSION = "1"
 
@@ -24,6 +27,11 @@ class ContainerState(BaseModel):
     reason: str | None = None
     message: str | None = None
     exit_code: int | None = None
+
+    @field_validator("message")
+    @classmethod
+    def _mask_message(cls, value: str | None) -> str | None:
+        return mask_secrets(value) if value else value
 
 
 class ContainerStatus(BaseModel):
@@ -43,6 +51,11 @@ class ContainerStatus(BaseModel):
             "Kubernetes API returns it with timestamps=true. Bounded by the snapshot's log limits."
         ),
     )
+
+    @field_validator("previous_logs", "recent_logs")
+    @classmethod
+    def _mask_logs(cls, value: list[str]) -> list[str]:
+        return [mask_secrets(line) for line in value]
 
 
 class Pod(BaseModel):
@@ -77,6 +90,12 @@ class Event(BaseModel):
     object: str = Field(description='"Kind/name" of the object the event is about.')
     message: str | None
     count: int
+
+    @field_validator("message")
+    @classmethod
+    def _mask_message(cls, value: str | None) -> str | None:
+        return mask_secrets(value) if value else value
+
     first_seen: datetime | None = None
     last_seen: datetime | None = None
 

@@ -341,3 +341,27 @@ def test_scan_from_names_every_live_only_flag_given(monkeypatch):
     result = CliRunner().invoke(app, args)
     assert result.exit_code == 1
     assert "--selector, --log-lines apply only to a live scan" in result.stderr
+
+
+def test_collect_writes_masked_logs_and_messages(monkeypatch, tmp_path):
+    from fakes import FakeApps, FakeCore, container_status, event, pod, state
+
+    import tidewatch.cli as cli
+
+    fake_key = "sk-fake0000test1111"  # gitleaks:allow (made-up value)
+    status = container_status(
+        restarts=1, st=state(waiting=("CreateContainerConfigError", "bad api_key=hunter2xyz"))
+    )
+    ev = event(reason="Failed")
+    ev.message = "pull failed: Authorization: Bearer abc.def.ghi"
+    logs = f"2026-11-03T02:44:44.000000000Z ERROR upstream 401 for key {fake_key}"
+    core = FakeCore(pods=[pod(statuses=[status])], events=[ev], logs=logs)
+    monkeypatch.setattr(cli, "load_clients", lambda context: (core, FakeApps(), "kind-test"))
+    out = tmp_path / "snapshot.json"
+    result = CliRunner().invoke(app, ["collect", "-n", "demo", "-o", str(out)])
+    assert result.exit_code == 0, result.output
+    text = out.read_text()
+    for secret in (fake_key, "hunter2xyz", "abc.def.ghi"):
+        assert secret not in text, secret
+    assert text.count("sk-***") == 2  # current and previous run both masked
+    assert "api_key=***" in text and "Bearer ***" in text

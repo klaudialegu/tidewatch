@@ -122,3 +122,23 @@ def test_snapshot_without_recent_logs_still_loads_as_v1(tmp_path):
     assert snap.schema_version == "1"
     assert all(c.recent_logs == [] for p in snap.pods for c in p.containers)
     assert all(p.labels == {} for p in snap.pods)
+
+
+def test_loading_an_unmasked_snapshot_file_masks_it(tmp_path):
+    import json
+
+    from tidewatch.snapshot import load
+
+    fake_key = "sk-fake0000test1111"  # gitleaks:allow (made-up value)
+    data = json.loads((Path(__file__).resolve().parent / "fixtures" / "healthy.json").read_text())
+    c = data["pods"][0]["containers"][0]
+    c["recent_logs"] = [f"2026-11-03T02:44:44Z ERROR upstream 401 key {fake_key}"]
+    c["previous_logs"] = ["password=hunter2xyz"]
+    c["state"]["message"] = "token: abcd1234efgh"  # gitleaks:allow (made-up value)
+    data["events"][0]["message"] = "Authorization: Basic dXNlcjpwYXNz"
+    path = tmp_path / "old-unmasked.json"
+    path.write_text(json.dumps(data))
+    dumped = load(path).model_dump_json()
+    for secret in (fake_key, "hunter2xyz", "abcd1234efgh", "dXNlcjpwYXNz"):
+        assert secret not in dumped, secret
+    assert "2026-11-03T02:44:44Z ERROR upstream 401 key sk-***" in dumped
