@@ -416,9 +416,9 @@ def test_mask_hides_json_quoted_keys_and_basic_auth():
     )
     assert mask_secrets("Authorization: Basic dXNlcjpwYXNz") == "Authorization: Basic ***"
     assert mask_secrets("basic health check ok") == "basic health check ok"
-    for line, masked in (
-        ('{"access_token": "abcd1234efgh"}', '{"access_token": "***"}'),
-        ("client_secret: abcd1234efgh", "client_secret: ***"),
+    for line, masked in (  # made-up values, never real keys
+        ('{"access_token": "abcd1234efgh"}', '{"access_token": "***"}'),  # gitleaks:allow
+        ("client_secret: abcd1234efgh", "client_secret: ***"),  # gitleaks:allow
         ("db_password=hunter2xyz", "db_password=***"),
         ("OPENAI_API_KEY=abc", "OPENAI_API_KEY=***"),
     ):
