@@ -2,7 +2,7 @@
 
 A read-only command-line tool that takes a snapshot of one app running on Kubernetes, diagnoses common failures from it, and writes a ticket-ready report: what broke, the evidence, and what to check next.
 
-> **Status:** early (0.1.0), built and tested against a local [kind](https://kind.sigs.k8s.io/) lab cluster, not production. Log excerpts in reports mask key-like tokens, but full redaction isn't built yet: treat reports as internal, and snapshots (which hold raw, unmasked logs) as sensitive.
+> **Status:** early (0.1.0), built and tested against a local [kind](https://kind.sigs.k8s.io/) lab cluster, not production. Snapshots and reports mask key-like tokens (minimal redaction), but names, hostnames and image references stay as they are: treat both as internal.
 
 ## Why
 
@@ -22,7 +22,7 @@ collect  ->  diagnose  ->  report
 - **Diagnose:** runs rules against the snapshot. Each finding has a severity, the object, evidence (the event, state or log line) and next steps.
 - **Report:** readable text in the terminal, or JSON (`--json`, `-o report.json`).
 
-Because diagnosis runs on a snapshot, you can scan offline: `tidewatch scan --from snapshot.json`. A snapshot holds raw, unmasked log lines, so handle it like the logs themselves.
+Because diagnosis runs on a snapshot, you can scan offline: `tidewatch scan --from snapshot.json`. Log lines and messages in a snapshot are masked like report excerpts (see Safety).
 
 ### Rules
 
@@ -95,7 +95,7 @@ lab/scenario.sh reset
 
 - **Read-only:** the only Kubernetes calls are read the namespace (to check it exists), list pods, read pod logs, list deployments and list events. An allowlist test fails if any other call appears.
 - **Bounded logs:** a capped number of recent lines per container. A finding's excerpt holds only the lines a rule matched (at most 3).
-- **Masking:** key-like tokens in excerpts (`sk-…`, Bearer and Basic auth, `api_key=…`, `"access_token": "…"`, long mixed-character strings; values of keys named like `token`, `secret` or `password`) become `***` (an `sk-` style prefix stays visible). Provider request IDs (`req_…`, `chatcmpl-…`) stay visible, because provider support asks for them. This is a guard rail, not redaction: object names, image references and event messages can still hold internal details. Snapshots from `collect` are not masked at all.
+- **Masking (minimal redaction):** key-like tokens in every snapshot log line and message, and so in every report excerpt, (`sk-…`, Bearer and Basic auth, `api_key=…`, `"access_token": "…"`, long mixed-character strings; values of keys named like `token`, `secret` or `password`) become `***` (an `sk-` style prefix stays visible). Provider request IDs (`req_…`, `chatcmpl-…`) stay visible, because provider support asks for them. An older unmasked snapshot is masked when it's loaded. It's pattern-based: it catches common key shapes, not every secret, and object names, hostnames and image references stay as they are ([ADR 0005](docs/decisions/0005-minimal-redaction-in-snapshots.md)).
 - **Lab data only:** every fixture in this repo comes from the local lab cluster.
 
 ## How it compares
@@ -116,7 +116,7 @@ Monitoring or alerting (it doesn't watch continuously), fixing anything (it neve
 
 ## Roadmap
 
-Redaction of reports and snapshots, a shareable support bundle, runbook links per finding, a missing-Secret rule, and an optional AI summary that only ever sees findings, never raw logs.
+Fuller redaction (names, hostnames, IPs), a shareable support bundle, runbook links per finding, a missing-Secret rule, and an optional AI summary that only ever sees findings, never raw logs.
 
 ## Development
 

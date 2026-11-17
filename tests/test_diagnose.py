@@ -164,3 +164,20 @@ def test_existing_scenario_fixtures_unchanged_findings():
     }
     for name, rule_id in expected.items():
         assert only_finding_on_app(name).rule_id == rule_id, name
+
+
+def test_rules_still_match_after_snapshot_masking():
+    import json
+
+    from tidewatch.snapshot import Snapshot
+
+    fake_key = "sk-fake0000test1111"  # gitleaks:allow (made-up value)
+    data = json.loads((FIXTURES / "llm-bad-key.json").read_text())
+    for p in data["pods"]:
+        for c in p["containers"]:
+            c["recent_logs"] = [
+                f"{line} key {fake_key}" if "401" in line else line for line in c["recent_logs"]
+            ]
+    report = diagnose(Snapshot.model_validate(data), now=T0)
+    assert rule_ids(report) == ["llm-upstream-auth-failed"]
+    assert fake_key not in report.model_dump_json()

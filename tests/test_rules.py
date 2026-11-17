@@ -440,6 +440,12 @@ def test_mask_keeps_provider_request_ids_visible():
     assert mask_secrets("key sk-proj_01HXYZABCDEFGHJKMNPQRS12") == "key sk-***"
 
 
+def test_mask_keeps_image_digests_visible():
+    digest = "sha256:4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    line = f'Container image "registry.example/agent@{digest}" already present on machine'
+    assert mask_secrets(line) == line
+
+
 def test_mask_time_stays_linear_on_huge_lines():
     start = time.perf_counter()
     for huge in ("a" * 200_000, "a-" * 100_000, "x" * 199_999 + "1"):
