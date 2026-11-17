@@ -2,7 +2,7 @@
 
 A read-only command-line tool that takes a snapshot of one app running on Kubernetes, diagnoses common failures from it, and writes a ticket-ready report: what broke, the evidence, and what to check next.
 
-> **Status:** early (0.1.0), built and tested against a local [kind](https://kind.sigs.k8s.io/) lab cluster, not production. Log excerpts mask key-like tokens, but full redaction isn't built yet, so treat reports as internal.
+> **Status:** early (0.1.0), built and tested against a local [kind](https://kind.sigs.k8s.io/) lab cluster, not production. Log excerpts in reports mask key-like tokens, but full redaction isn't built yet: treat reports as internal, and snapshots (which hold raw, unmasked logs) as sensitive.
 
 ## Why
 
@@ -22,7 +22,7 @@ collect  ->  diagnose  ->  report
 - **Diagnose:** runs rules against the snapshot. Each finding has a severity, the object, evidence (the event, state or log line) and next steps.
 - **Report:** readable text in the terminal, or JSON (`--json`, `-o report.json`).
 
-Because diagnosis runs on a snapshot, you can scan offline, for example a snapshot attached to a ticket: `tidewatch scan --from snapshot.json`.
+Because diagnosis runs on a snapshot, you can scan offline: `tidewatch scan --from snapshot.json`. A snapshot holds raw, unmasked log lines, so handle it like the logs themselves.
 
 ### Rules
 
@@ -93,9 +93,9 @@ lab/scenario.sh reset
 
 ## Safety
 
-- **Read-only:** the only Kubernetes calls are list pods, read pod logs, list deployments and list events. An allowlist test fails if any other call appears.
+- **Read-only:** the only Kubernetes calls are read the namespace (to check it exists), list pods, read pod logs, list deployments and list events. An allowlist test fails if any other call appears.
 - **Bounded logs:** a capped number of recent lines per container. A finding's excerpt holds only the lines a rule matched (at most 3).
-- **Masking:** key-like tokens in excerpts (`sk-…`, Bearer and Basic auth, `api_key=…`, `"access_token": "…"`, long mixed-character strings) become `***`. Provider request IDs (`req_…`, `chatcmpl-…`) stay visible, because provider support asks for them. This is a guard rail, not redaction: object names, image references and event messages can still hold internal details.
+- **Masking:** key-like tokens in excerpts (`sk-…`, Bearer and Basic auth, `api_key=…`, `"access_token": "…"`, long mixed-character strings) become `***`. Provider request IDs (`req_…`, `chatcmpl-…`) stay visible, because provider support asks for them. This is a guard rail, not redaction: object names, image references and event messages can still hold internal details. Snapshots from `collect` are not masked at all.
 - **Lab data only:** every fixture in this repo comes from the local lab cluster.
 
 ## How it compares
@@ -105,10 +105,10 @@ Good tools already cover parts of this space. Tidewatch is deliberately narrow: 
 | Tool | What it is | Main difference from Tidewatch |
 |---|---|---|
 | [Replicated Troubleshoot](https://troubleshoot.sh/) | kubectl plugins (`support-bundle`, `preflight`) that collect a redacted support bundle and run analyzers on it, driven by YAML specs. | The closest match, and much broader: built-in redactors, many collectors and analyzers, specs vendors ship to customers. Tidewatch is a small rule set with no spec language, plus LLM-provider rules. |
-| [k8sgpt](https://k8sgpt.ai/) | A CLI and an in-cluster operator that scan for problems with built-in analyzers and can explain them with an AI backend. | k8sgpt scans resources cluster-wide and can explain with AI. Tidewatch works on a saved snapshot of one namespace, explains from fixed rules with quoted evidence, and reads app logs for upstream LLM failures. |
+| [k8sgpt](https://k8sgpt.ai/) | A CLI and an in-cluster operator that scan for problems with built-in analyzers and can explain them with an AI backend. | k8sgpt analyzes many resource types (by default across the cluster, with a namespace filter) and can explain with AI. Tidewatch explains from fixed rules with quoted evidence, can scan a saved snapshot offline, and has rules for upstream LLM failures that leave pods green. |
 | [Popeye](https://popeyecli.com/) | A read-only cluster "sanitizer" that reports misconfigurations and gives the cluster a score. | Popeye finds configuration hygiene problems across a cluster. Tidewatch diagnoses why a specific app is failing right now. |
 | [Robusta](https://home.robusta.dev/), [Komodor](https://komodor.com/) | Troubleshooting platforms that run in or alongside the cluster: alert enrichment, timelines, automations (Komodor is commercial). | Always-on platforms with an in-cluster component. Tidewatch is a one-shot CLI with nothing to install in the cluster. |
-| [kube-score](https://github.com/zegl/kube-score), [Polaris](https://polaris.docs.fairwinds.com/) | Best-practice checks on manifests (Polaris also as a dashboard and admission controller). | They work before deploy, on manifests. Tidewatch works after deploy, on what's actually happening. |
+| [kube-score](https://github.com/zegl/kube-score), [Polaris](https://polaris.docs.fairwinds.com/) | Best-practice checks on manifests (Polaris also as a dashboard and admission controller). | They check configuration against best practices (kube-score on manifests; Polaris also on running workloads). Tidewatch diagnoses runtime failures from events, container states and logs. |
 
 ## Not in scope
 
