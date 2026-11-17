@@ -17,11 +17,17 @@ MAX_LOG_LINES = 3
 _MASKS = [
     (re.compile(r"\b(sk|pk|rk)-[A-Za-z0-9_\-]{6,}"), r"\1-***"),
     (re.compile(r"\b(Bearer)\s+\S+", re.IGNORECASE), r"\1 ***"),
-    (
-        re.compile(r"\b(api[_-]?key|token|secret|password)(\s*[=:]\s*)\S+", re.IGNORECASE),
+    (re.compile(r"\b(Authorization\s*[=:]\s*Basic)\s+\S+", re.IGNORECASE), r"\1 ***"),
+    (  # key=value, key: value, and JSON-quoted "key": "value"
+        re.compile(
+            r"\b(api[_-]?key|token|secret|password)([\"']?\s*[=:]\s*[\"']?)[^\s\"',}]+",
+            re.IGNORECASE,
+        ),
         r"\1\2***",
     ),
-    (re.compile(r"[A-Za-z0-9_\-+/=]{24,}"), "***"),
+    # A long run with both letters and digits; no "/", "-" or "." so URLs, hostnames and file
+    # paths keep their (short) segments.
+    (re.compile(r"(?=[A-Za-z0-9_+=]*\d)(?=[A-Za-z0-9_+=]*[A-Za-z])[A-Za-z0-9_+=]{24,}"), "***"),
 ]
 
 

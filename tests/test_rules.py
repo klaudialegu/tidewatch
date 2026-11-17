@@ -312,6 +312,15 @@ def test_llm_status_codes_in_upstream_ports_are_not_status_codes():
     assert run(llm_upstream_rate_limited, pod) == []
 
 
+def test_llm_config_lines_with_timeout_or_rate_limit_words_are_not_failures():
+    pod = agent_with(
+        "INFO model client configured: timeout=30s, rate limit 60/min",
+        "INFO upstream model ok",
+    )
+    for fn in LLM_RULES:
+        assert run(fn, pod) == [], fn.__name__
+
+
 def test_llm_rule_downgrades_when_latest_upstream_line_is_ok():
     pod = agent_with(
         "ERROR upstream model call failed: 401 Unauthorized",
@@ -328,7 +337,8 @@ def test_llm_rule_downgrades_when_latest_upstream_line_is_ok():
 
 def test_llm_auth_excerpt_masks_key_like_tokens():
     pod = agent_with(
-        "ERROR upstream model call failed: 401 Incorrect API key provided: sk-abc123SECRET99",
+        "ERROR upstream model call failed: 401 Incorrect API key provided: "
+        "sk-abc123SECRET99",  # gitleaks:allow (fake test value)
         "ERROR upstream model call failed: 401 Unauthorized Bearer eyJhbGciOi.xyz",
     )
     (f,) = run(llm_upstream_auth_failed, pod)
@@ -373,3 +383,22 @@ def test_excerpts_hold_only_matched_lines():
         ]
     )
     assert run(container_exits_on_start, quiet)[0].log_excerpt == []  # nothing matched
+
+
+def test_mask_hides_long_mixed_tokens_but_keeps_urls_paths_and_words():
+    hexkey = "3f9a1c0be47d2a8f6c5e1b9d0a7f4e2c"  # gitleaks:allow (fake test value)
+    assert mask_secrets(f"provider key {hexkey} rejected") == "provider key *** rejected"
+    for kept in (
+        "POST http://model.demo.svc/v1/chat/completions-stream-endpoint timed out",
+        'File "/app/.venv/lib/python3.12/site-packages/openai/_base_client.py", line 1012',
+        "AuthenticationErrorSomethingVeryLong happened",
+    ):
+        assert mask_secrets(kept) == kept
+
+
+def test_mask_hides_json_quoted_keys_and_basic_auth():
+    assert (
+        mask_secrets('{"api_key": "abc12345", "model": "m"}') == '{"api_key": "***", "model": "m"}'
+    )
+    assert mask_secrets("Authorization: Basic dXNlcjpwYXNz") == "Authorization: Basic ***"
+    assert mask_secrets("basic health check ok") == "basic health check ok"

@@ -258,6 +258,11 @@ RATE = re.compile(
     STATUS + r"429\b|\brate[\s_-]?limit(?:ed|s)?\b|\btoo\s+many\s+requests\b", re.IGNORECASE
 )
 TIMEOUT = re.compile(r"\btimed\s+out\b|\btimeout\b|\bdeadline\s+exceeded\b", re.IGNORECASE)
+# Rate-limit and timeout words also show up in harmless config lines ("timeout=30s, rate limit
+# 60/min"), so those two rules only count a line that also says a call went wrong.
+FAILED_CALL = re.compile(
+    FAILURE.pattern + r"|\b(?:exceeded|timed\s+out|too\s+many\s+requests)\b", re.IGNORECASE
+)
 
 
 @dataclass(frozen=True)
@@ -309,11 +314,17 @@ def llm_findings(
     title: str,
     what: str,
     next_steps: list[str],
+    needs_failure: bool = False,
 ) -> list[Finding]:
     findings = []
     for c in pod.containers:
         upstream = upstream_lines(c)
-        matched = [line for line in upstream if pattern.search(line.message)]
+        matched = [
+            line
+            for line in upstream
+            if pattern.search(line.message)
+            and (not needs_failure or FAILED_CALL.search(line.message))
+        ]
         if not matched:
             continue
         latest = upstream[-1]
@@ -383,6 +394,7 @@ def llm_upstream_rate_limited(pod: Pod, snapshot: Snapshot) -> list[Finding]:
         severity="warning",
         title="LLM provider is rate-limiting",
         what="the model provider rate-limiting requests (429)",
+        needs_failure=True,
         next_steps=[
             "Check the provider account's quota and current usage.",
             "Make sure the app backs off and honours Retry-After instead of retrying at once.",
@@ -401,6 +413,7 @@ def llm_upstream_timeout(pod: Pod, snapshot: Snapshot) -> list[Finding]:
         severity="critical",
         title="LLM provider calls time out",
         what="calls to the model provider timing out",
+        needs_failure=True,
         next_steps=[
             "Check egress from the cluster to the provider (DNS, proxy, NetworkPolicy, firewall).",
             "Check the provider's status page for latency or an outage.",
