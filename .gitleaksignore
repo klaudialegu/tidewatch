@@ -1,2 +1,4 @@
 # Fake test value (base64 of "fake-key-123") in an earlier commit; the line now carries gitleaks:allow.
 049617a6a7b2c4619915975f565e78488e31b01c:tests/test_lab_scripts.py:generic-api-key:73
+# Fake test value (sk-abc123SECRET99, a made-up key) in an earlier commit; the line now carries gitleaks:allow.
+7ab1e2aaa008f8b00a2308199ba3dd5be4d66a9a:tests/test_rules.py:generic-api-key:319
