@@ -35,7 +35,7 @@ Because diagnosis runs on a snapshot, you can scan offline: `tidewatch scan --fr
 | `llm-upstream-rate-limited` | warning | The LLM provider is rate-limiting (429). |
 | `llm-upstream-timeout` | critical | Calls to the LLM provider time out. |
 
-Severity reflects the snapshot. A container that's running again drops to warning, and an LLM finding drops one level when the latest upstream call succeeded. Tidewatch states facts and never calls anything "healthy".
+Severity reflects the snapshot. A container that's running again drops to warning (or info after a node or runtime restart), and an LLM finding drops one level when the latest upstream call succeeded. Tidewatch states facts and never calls anything "healthy".
 
 ## Example
 
@@ -95,7 +95,7 @@ lab/scenario.sh reset
 
 - **Read-only:** the only Kubernetes calls are read the namespace (to check it exists), list pods, read pod logs, list deployments and list events. An allowlist test fails if any other call appears.
 - **Bounded logs:** a capped number of recent lines per container. A finding's excerpt holds only the lines a rule matched (at most 3).
-- **Masking:** key-like tokens in excerpts (`sk-…`, Bearer and Basic auth, `api_key=…`, `"access_token": "…"`, long mixed-character strings) become `***`. Provider request IDs (`req_…`, `chatcmpl-…`) stay visible, because provider support asks for them. This is a guard rail, not redaction: object names, image references and event messages can still hold internal details. Snapshots from `collect` are not masked at all.
+- **Masking:** key-like tokens in excerpts (`sk-…`, Bearer and Basic auth, `api_key=…`, `"access_token": "…"`, long mixed-character strings; values of keys named like `token`, `secret` or `password`) become `***` (an `sk-` style prefix stays visible). Provider request IDs (`req_…`, `chatcmpl-…`) stay visible, because provider support asks for them. This is a guard rail, not redaction: object names, image references and event messages can still hold internal details. Snapshots from `collect` are not masked at all.
 - **Lab data only:** every fixture in this repo comes from the local lab cluster.
 
 ## How it compares
