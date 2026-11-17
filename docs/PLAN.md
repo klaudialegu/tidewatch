@@ -18,7 +18,7 @@ Lab: Docker Desktop plus a kind cluster named `tidewatch-lab`.
 ## Safety
 - **Strictly read-only against clusters:** get, list and log only, enforced by a test.
 - **Lab data only:** never real company clusters or customer logs.
-- **The repo stays private until redaction exists.**
+- **Going public needs minimal redaction** ([ADR 0005](decisions/0005-minimal-redaction-in-snapshots.md)) and a clean full-history privacy check.
 
 ## Roadmap
 **Session 1** (stops at the end of Block 4: about 3.5 h of work plus a 30-minute break):
@@ -32,7 +32,8 @@ Lab: Docker Desktop plus a kind cluster named `tidewatch-lab`.
 - **`tidewatch scan`:** the report, plus `--json` with `schema_version`.
 - **README.**
 
+**Before going public:** minimal redaction (snapshots masked like reports, ADR 0005), then a clean full-history privacy check, then the owner's OK.
+
 **Later:**
-1. Fuller redaction (names, hostnames, IPs; minimal masking exists, ADR 0005), `tidewatch bundle`, runbooks, and a bonus rule (missing Secret).
+1. Fuller redaction (names, hostnames, IPs), `tidewatch bundle`, runbooks, and a bonus rule (missing Secret).
 2. An AI summary step (framework to be decided; it gets findings only, never raw logs).
-3. Then go public.
