@@ -20,4 +20,4 @@ A report (`schema_version: "1"`) holds the source (context, namespace, snapshot 
 - Trade-off: any change to these fields means `schema_version` "2" and a reader that understands both.
 
 ## Amendment (2026-11-02, ADR 0004 slice)
-`log_excerpt` holds **only the lines a rule matched**, never the lines around them (an empty excerpt is fine), and key-like tokens in it (`sk-...`, `Bearer ...`, `api_key=...`, long token strings) are masked to `***`. This narrows the field's content without changing its shape, so the report stays at `schema_version` "1". Masking is a guard rail, not redaction.
+`log_excerpt` holds **only the lines a rule matched**, never the lines around them (an empty excerpt is fine), and key-like tokens in it (`sk-...`, `Bearer ...`, `api_key=...`, long token strings) are masked to `***`. This narrows the field's content without changing its shape, so the report stays at `schema_version` "1". Provider request IDs (`req_...`, `chatcmpl-...`) stay visible, because provider support asks for them first. Masking is a guard rail, not redaction.

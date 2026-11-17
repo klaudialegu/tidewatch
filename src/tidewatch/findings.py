@@ -28,11 +28,18 @@ _MASKS = [
     ),
     # A long run with both letters and digits; no "/", "-" or "." so URLs, hostnames and file
     # paths keep their (short) segments. Checked in a function so time stays linear in length.
-    (re.compile(r"[A-Za-z0-9_+=]{24,}"), lambda m: _mask_if_mixed(m.group(0))),
+    (re.compile(r"[A-Za-z0-9_+=]{24,}"), lambda m: _mask_if_mixed(m)),
 ]
 
+# Provider request IDs stay visible: they're what the provider's support asks for first.
+_REQUEST_ID_PREFIXES = ("req_", "chatcmpl-")
 
-def _mask_if_mixed(run: str) -> str:
+
+def _mask_if_mixed(m: re.Match) -> str:
+    run = m.group(0)
+    before = m.string[max(0, m.start() - 9) : m.start()]
+    if run.startswith("req_") or before.endswith(_REQUEST_ID_PREFIXES):
+        return run
     has_digit = any(ch.isdigit() for ch in run)
     has_letter = any(ch.isalpha() for ch in run)
     return "***" if has_digit and has_letter else run

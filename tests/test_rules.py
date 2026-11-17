@@ -427,6 +427,15 @@ def test_mask_hides_json_quoted_keys_and_basic_auth():
         assert mask_secrets(kept) == kept
 
 
+def test_mask_keeps_provider_request_ids_visible():
+    for kept in (
+        "upstream 401, request id req_01HXYZABCDEFGHJKMNPQRS12",
+        "upstream timed out (id chatcmpl-9AbCdEfGhIjKlMnOpQrStUvWx12)",
+    ):
+        assert mask_secrets(kept) == kept
+    assert mask_secrets("key sk-proj_01HXYZABCDEFGHJKMNPQRS12") == "key sk-***"
+
+
 def test_mask_time_stays_linear_on_huge_lines():
     start = time.perf_counter()
     for huge in ("a" * 200_000, "a-" * 100_000, "x" * 199_999 + "1"):
