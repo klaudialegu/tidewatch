@@ -26,3 +26,6 @@ dist/
 
 # Lab blind-mode history (which scenario is applied)
 lab/.scenario-state
+
+# Local Claude Code skills (personal workflow notes; kept on disk, never committed)
+.claude/skills/

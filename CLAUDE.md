@@ -72,5 +72,5 @@ It is built with Claude Code as a pair programmer, in small reviewed slices, aga
 ## Map
 - docs/PLAN.md: what, why, stack, safety, roadmap. docs/decisions/: ADRs.
 - scripts/check-private-terms.sh and .githooks/: the private-terms guard.
-- .claude/: the reviewer subagent, skills (/resume, /learn, /wrap-up, /explain-diff, /adr, /second-opinion), settings.
+- .claude/: the reviewer subagent and settings. The skills (/resume, /learn, /wrap-up, /explain-diff, /adr, /second-opinion) live in .claude/skills/, which is gitignored (local only).
 - Private and gitignored: CLAUDE.local.md, .private-terms, NEXT.md, ROADMAP.md, PARKING_LOT.md, docs/LEARNING_LOG.md.
