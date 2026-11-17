@@ -54,8 +54,8 @@ def current_state(c: ContainerStatus) -> str:
 
 
 def pick_log_lines(lines: list[str], limit: int = 3) -> list[str]:
-    errors = [line for line in lines if ERROR_LINE.search(line)]
-    return (errors or lines)[-limit:]
+    """Only lines that matched (never the lines around them); none matched means none."""
+    return [line for line in lines if ERROR_LINE.search(line)][-limit:]
 
 
 def container_spec(pod: Pod, snapshot: Snapshot, container: str) -> ContainerSpec | None:
@@ -235,3 +235,201 @@ def oom_killed(pod: Pod, snapshot: Snapshot) -> list[Finding]:
             )
         )
     return findings
+
+
+# --- LLM provider (upstream) rules ------------------------------------------------------------
+# These read a container's current-run logs. They never look at pod names: a pod gets a finding
+# only from its own log lines (ADR 0004). Only lines about an upstream call count, web-server
+# access-log lines never do, and status codes only match in a status position, so a client port
+# like 54291 can't look like a 429.
+
+TIMESTAMP = re.compile(r"^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d+)?(?:Z|[+-]\d\d:\d\d)$")
+ACCESS_LOG = re.compile(r'"(?:GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS) [^"]* HTTP/\d(?:\.\d)?"')
+UPSTREAM = re.compile(r"\b(?:upstream|model|llm|api|provider|completions?)\b", re.IGNORECASE)
+STATUS = r"(?:status(?:\s+code)?|http|error\s+code|failed:)\s*[:=]?\s*"
+FAILURE = re.compile(r"\b(?:fail(?:ed|ure)?|error|exception|denied)\b", re.IGNORECASE)
+SUCCESS = re.compile(r"\b(?:ok|succeeded|success)\b", re.IGNORECASE)
+AUTH = re.compile(
+    STATUS + r"40[13]\b|\bunauthori[sz]ed\b|\b(?:invalid|incorrect)\s+api\s+key\b"
+    r"|\bauthentication(?:error|\s+failed)\b|\bpermission\s+denied\b",
+    re.IGNORECASE,
+)
+RATE = re.compile(
+    STATUS + r"429\b|\brate[\s_-]?limit(?:ed|s)?\b|\btoo\s+many\s+requests\b", re.IGNORECASE
+)
+TIMEOUT = re.compile(r"\btimed\s+out\b|\btimeout\b|\bdeadline\s+exceeded\b", re.IGNORECASE)
+# Rate-limit and timeout words also show up in harmless config lines ("timeout=30s, rate limit
+# 60/min, log_level=error"). For those two rules a hit followed by a number is a setting, not an
+# event, and the line must also say a call went wrong (a failure word or a 4xx/5xx status).
+SETTING_VALUE = re.compile(r"\s*[=:]?\s*\d")
+FAILED_CALL = re.compile(
+    FAILURE.pattern
+    + r"|\b(?:exceeded|timed\s+out|too\s+many\s+requests|rate[\s_-]?limited|throttled)\b"
+    + r"|"
+    + STATUS
+    + r"[45]\d\d\b",
+    re.IGNORECASE,
+)
+
+
+def reports_event(pattern: re.Pattern, message: str) -> bool:
+    """True if a hit of `pattern` is an event, not a setting like `timeout=30s`."""
+    return any(not SETTING_VALUE.match(message, hit.end()) for hit in pattern.finditer(message))
+
+
+def is_hit(pattern: re.Pattern, message: str, needs_failure: bool) -> bool:
+    if not needs_failure:
+        return bool(pattern.search(message))
+    return reports_event(pattern, message) and bool(FAILED_CALL.search(message))
+
+
+@dataclass(frozen=True)
+class LogLine:
+    raw: str
+    timestamp: str | None
+    message: str
+
+
+def parse_log(lines: list[str]) -> list[LogLine]:
+    parsed = []
+    for raw in lines:
+        first, _, rest = raw.partition(" ")
+        if TIMESTAMP.match(first):
+            parsed.append(LogLine(raw, first, rest))
+        else:
+            parsed.append(LogLine(raw, None, raw))
+    return parsed
+
+
+def upstream_lines(c: ContainerStatus) -> list[LogLine]:
+    return [
+        line
+        for line in parse_log(c.recent_logs)
+        if UPSTREAM.search(line.message) and not ACCESS_LOG.search(line.message)
+    ]
+
+
+def is_success(line: LogLine) -> bool:
+    return bool(SUCCESS.search(line.message)) and not FAILURE.search(line.message)
+
+
+def window_text(snapshot: Snapshot) -> str:
+    parts = []
+    if snapshot.log_lines:
+        parts.append(f"last {snapshot.log_lines} lines")
+    if snapshot.log_since_seconds:
+        parts.append(f"last {snapshot.log_since_seconds // 60} min")
+    return " / ".join(parts) or "recent logs"
+
+
+def llm_findings(
+    pod: Pod,
+    snapshot: Snapshot,
+    *,
+    rule_id: str,
+    pattern: re.Pattern,
+    severity: Severity,
+    title: str,
+    what: str,
+    next_steps: list[str],
+    needs_failure: bool = False,
+) -> list[Finding]:
+    findings = []
+    for c in pod.containers:
+        upstream = upstream_lines(c)
+        matched = [line for line in upstream if is_hit(pattern, line.message, needs_failure)]
+        if not matched:
+            continue
+        latest = upstream[-1]
+        recovered = latest not in matched and is_success(latest)
+        level: Severity = severity
+        if recovered:
+            level = "warning" if severity == "critical" else "info"
+        evidence = [
+            f"{len(matched)} of {len(c.recent_logs)} recent log lines ({window_text(snapshot)}) "
+            f"show {what}",
+            f"container {c.name}: {current_state(c)}, ready={str(c.ready).lower()}, "
+            f"{plural(c.restart_count, 'restart')}",
+        ]
+        if matched[0].timestamp:
+            evidence.append(f"first seen {matched[0].timestamp}, last seen {matched[-1].timestamp}")
+        if recovered:
+            when = f" at {latest.timestamp}" if latest.timestamp else ""
+            evidence.append(f"latest upstream call succeeded{when}")
+            summary = (
+                f"Container {c.name}'s latest upstream call succeeded; {len(matched)} earlier "
+                f"log lines show {what}."
+            )
+        else:
+            green = " while Kubernetes shows it running and ready" if up_now(c) else ""
+            summary = f"Container {c.name} logs {what}{green}."
+        findings.append(
+            Finding(
+                rule_id=rule_id,
+                severity=level,
+                title=title,
+                object=f"Pod/{pod.name}",
+                container=c.name,
+                summary=summary,
+                evidence=evidence,
+                log_excerpt=[line.raw for line in matched[-3:]],
+                next_steps=next_steps,
+            )
+        )
+    return findings
+
+
+@rule("llm-upstream-auth-failed", "critical", "LLM provider rejects the credentials")
+def llm_upstream_auth_failed(pod: Pod, snapshot: Snapshot) -> list[Finding]:
+    return llm_findings(
+        pod,
+        snapshot,
+        rule_id="llm-upstream-auth-failed",
+        pattern=AUTH,
+        severity="critical",
+        title="LLM provider rejects the credentials",
+        what="the model provider rejecting the credentials (401/403)",
+        next_steps=[
+            "Check the Secret holding the provider key: right key, right environment, not empty.",
+            "Check whether the key was rotated or revoked on the provider side.",
+            "After fixing the Secret, restart the Deployment so pods read the new value.",
+        ],
+    )
+
+
+@rule("llm-upstream-rate-limited", "warning", "LLM provider is rate-limiting")
+def llm_upstream_rate_limited(pod: Pod, snapshot: Snapshot) -> list[Finding]:
+    return llm_findings(
+        pod,
+        snapshot,
+        rule_id="llm-upstream-rate-limited",
+        pattern=RATE,
+        severity="warning",
+        title="LLM provider is rate-limiting",
+        what="the model provider rate-limiting requests (429)",
+        needs_failure=True,
+        next_steps=[
+            "Check the provider account's quota and current usage.",
+            "Make sure the app backs off and honours Retry-After instead of retrying at once.",
+            "Check for a traffic spike or a retry loop multiplying requests.",
+        ],
+    )
+
+
+@rule("llm-upstream-timeout", "critical", "LLM provider calls time out")
+def llm_upstream_timeout(pod: Pod, snapshot: Snapshot) -> list[Finding]:
+    return llm_findings(
+        pod,
+        snapshot,
+        rule_id="llm-upstream-timeout",
+        pattern=TIMEOUT,
+        severity="critical",
+        title="LLM provider calls time out",
+        what="calls to the model provider timing out",
+        needs_failure=True,
+        next_steps=[
+            "Check egress from the cluster to the provider (DNS, proxy, NetworkPolicy, firewall).",
+            "Check the provider's status page for latency or an outage.",
+            "Compare the app's timeout with the provider's typical latency for this model.",
+        ],
+    )

@@ -179,10 +179,34 @@ def scan(
         Path | None, typer.Option("--output", "-o", help="Also write the report JSON here.")
     ] = None,
     selector: SelectorOpt = None,
-    log_lines: LogLinesOpt = LOG_LINES,
-    log_since_minutes: LogSinceOpt = LOG_SINCE_SECONDS // 60,
+    log_lines: Annotated[
+        int | None,
+        typer.Option(
+            "--log-lines", min=1, help=f"Max log lines per container and run ({LOG_LINES})."
+        ),
+    ] = None,
+    log_since_minutes: Annotated[
+        int | None,
+        typer.Option(
+            "--log-since-minutes",
+            min=1,
+            help=f"Only read log lines this recent ({LOG_SINCE_SECONDS // 60}).",
+        ),
+    ] = None,
 ) -> None:
     """Diagnose common failures in one namespace and print a ticket-ready report."""
+    live_only = {
+        "--context": context,
+        "--selector": selector,
+        "--log-lines": log_lines,
+        "--log-since-minutes": log_since_minutes,
+    }
+    given = [flag for flag, value in live_only.items() if value is not None]
+    if from_file is not None and given:
+        raise fail(
+            f"{', '.join(given)} {'applies' if len(given) == 1 else 'apply'} only to a live "
+            "scan; a --from snapshot was already collected with its own settings"
+        )
     if (
         output is not None
         and from_file is not None
@@ -199,7 +223,13 @@ def scan(
     elif namespace is None:
         raise fail("--namespace is required unless --from is given")
     else:
-        snapshot = take_snapshot(namespace, context, selector, log_lines, log_since_minutes)
+        snapshot = take_snapshot(
+            namespace,
+            context,
+            selector,
+            log_lines or LOG_LINES,
+            log_since_minutes or LOG_SINCE_SECONDS // 60,
+        )
     report = diagnose(snapshot)
     data = report.model_dump_json(indent=2) + "\n"
     if output is not None:

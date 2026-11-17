@@ -5,7 +5,7 @@ from snapshots import cstatus, mkpod, mksnapshot, terminated, waiting
 
 from tidewatch.diagnose import diagnose
 from tidewatch.findings import MAX_EVIDENCE, Finding, Report
-from tidewatch.rules import Rule
+from tidewatch.rules import REGISTRY, Rule, llm_upstream_auth_failed
 from tidewatch.snapshot import load
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
@@ -126,3 +126,41 @@ def test_evidence_is_capped_at_five_items():
     )
     assert f.evidence == [str(i) for i in range(MAX_EVIDENCE)]
     assert f.log_excerpt == ["a", "b", "c"]
+
+
+def only_finding_on_app(name: str, app: str = "agent"):
+    snapshot = load(FIXTURES / f"{name}.json")
+    report = diagnose(snapshot, now=T0)
+    assert len(report.findings) == 1, [(f.rule_id, f.object) for f in report.findings]
+    (f,) = report.findings
+    assert f.rule_id in REGISTRY, f.rule_id  # the finding's id is the id the rule registered
+    labels = {f"Pod/{p.name}": p.labels for p in snapshot.pods}
+    assert labels[f.object].get("app") == app  # by label, never by pod name
+    return f
+
+
+def test_llm_bad_key_fixture_yields_only_llm_upstream_auth_failed():
+    f = only_finding_on_app("llm-bad-key")
+    assert (f.rule_id, f.severity) == ("llm-upstream-auth-failed", "critical")
+    assert REGISTRY[f.rule_id].fn is llm_upstream_auth_failed
+    assert "running and ready" in f.summary
+
+
+def test_llm_rate_limit_fixture_yields_only_llm_upstream_rate_limited():
+    f = only_finding_on_app("llm-rate-limit")
+    assert (f.rule_id, f.severity) == ("llm-upstream-rate-limited", "warning")
+
+
+def test_llm_timeout_fixture_yields_only_llm_upstream_timeout():
+    f = only_finding_on_app("llm-timeout")
+    assert (f.rule_id, f.severity) == ("llm-upstream-timeout", "critical")
+
+
+def test_existing_scenario_fixtures_unchanged_findings():
+    expected = {
+        "bad-image": "image-pull-failed",
+        "no-key": "container-exits-on-start",
+        "memory": "oom-killed",
+    }
+    for name, rule_id in expected.items():
+        assert only_finding_on_app(name).rule_id == rule_id, name
