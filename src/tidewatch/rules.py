@@ -333,11 +333,19 @@ def llm_findings(
     what: str,
     next_steps: list[str],
     needs_failure: bool = False,
+    select: Callable[[ContainerStatus], list[LogLine]] | None = None,
+    skip: Callable[[str], bool] | None = None,
 ) -> list[Finding]:
+    """`select` picks the lines a rule reads (default: upstream lines); a line `skip` claims
+    belongs to a more specific rule, so one log line never gives two findings."""
     findings = []
     for c in pod.containers:
-        upstream = upstream_lines(c)
-        matched = [line for line in upstream if is_hit(pattern, line.message, needs_failure)]
+        upstream = (select or upstream_lines)(c)
+        matched = [
+            line
+            for line in upstream
+            if is_hit(pattern, line.message, needs_failure) and not (skip and skip(line.message))
+        ]
         if not matched:
             continue
         latest = upstream[-1]
@@ -385,6 +393,7 @@ def llm_upstream_auth_failed(pod: Pod, snapshot: Snapshot) -> list[Finding]:
         pod,
         snapshot,
         rule_id="llm-upstream-auth-failed",
+        skip=elevenlabs_line,
         pattern=AUTH,
         severity="critical",
         title="LLM provider rejects the credentials",
@@ -403,6 +412,7 @@ def llm_upstream_rate_limited(pod: Pod, snapshot: Snapshot) -> list[Finding]:
         pod,
         snapshot,
         rule_id="llm-upstream-rate-limited",
+        skip=elevenlabs_line,
         pattern=RATE,
         severity="warning",
         title="LLM provider is rate-limiting",
@@ -422,6 +432,7 @@ def llm_upstream_timeout(pod: Pod, snapshot: Snapshot) -> list[Finding]:
         pod,
         snapshot,
         rule_id="llm-upstream-timeout",
+        skip=elevenlabs_line,
         pattern=TIMEOUT,
         severity="critical",
         title="LLM provider calls time out",
@@ -431,5 +442,136 @@ def llm_upstream_timeout(pod: Pod, snapshot: Snapshot) -> list[Finding]:
             "Check egress from the cluster to the provider (DNS, proxy, NetworkPolicy, firewall).",
             "Check the provider's status page for latency or an outage.",
             "Compare the app's timeout with the provider's typical latency for this model.",
+        ],
+    )
+
+
+# --- ElevenLabs API rules -----------------------------------------------------------------------
+# Only error codes ElevenLabs documents (read 2026-11-17):
+#   E: https://elevenlabs.io/docs/eleven-api/resources/errors
+#   H: https://elevenlabs.io/docs/help-center/technical/api-error-code-400-or-401
+#   C: https://elevenlabs.io/docs/changelog/2025/5/5
+# Errors come back as {"detail": {"type", "code", "message", "status" (legacy), "request_id"}}
+# (E, H). A code counts only as the value of a code or status field ("code": "x", 'status': 'x',
+# code=x), so a config line like `retry_on=rate_limit_exceeded` or prose naming a code never
+# matches. A line one of these rules matches is left out of the generic LLM rules (ADR 0006).
+
+
+def documented_code(*codes: str) -> str:
+    return r"(?<![\w-])[\"']?(?:code|status)[\"']?\s*[:=]\s*[\"']?(?:" + "|".join(codes) + r")\b"
+
+
+EL_AUTH = re.compile(documented_code("invalid_api_key", "missing_api_key"), re.IGNORECASE)
+EL_QUOTA = re.compile(
+    documented_code("insufficient_credits", "quota_exceeded")
+    + r"|\bexceeds\s+your\s+quota\s+limit\b",
+    re.IGNORECASE,
+)
+EL_RATE = re.compile(
+    documented_code("rate_limit_exceeded", "concurrent_limit_exceeded", "system_busy"),
+    re.IGNORECASE,
+)
+EL_VOICE = re.compile(documented_code("voice_not_found", "invalid_voice_id"), re.IGNORECASE)
+EL_PATTERNS = (EL_AUTH, EL_QUOTA, EL_RATE, EL_VOICE)
+
+
+def elevenlabs_line(message: str) -> bool:
+    """True if one of the ElevenLabs rules matches this line."""
+    return any(p.search(message) for p in EL_PATTERNS)
+
+
+def provider_lines(c: ContainerStatus) -> list[LogLine]:
+    """Upstream lines plus lines holding a documented ElevenLabs error (an error body alone
+    may have no upstream word); never web-server access-log lines."""
+    return [
+        line
+        for line in parse_log(c.recent_logs)
+        if (UPSTREAM.search(line.message) or elevenlabs_line(line.message))
+        and not ACCESS_LOG.search(line.message)
+    ]
+
+
+SUPPORT_STEP = "If it persists, contact ElevenLabs support with the request_id from the error."
+
+
+@rule("elevenlabs-auth-failed", "critical", "ElevenLabs rejects the API key")
+def elevenlabs_auth_failed(pod: Pod, snapshot: Snapshot) -> list[Finding]:
+    """401 invalid_api_key / missing_api_key (E; H). The key goes in the `xi-api-key` header
+    (https://elevenlabs.io/docs/api-reference/authentication)."""
+    return llm_findings(
+        pod,
+        snapshot,
+        rule_id="elevenlabs-auth-failed",
+        pattern=EL_AUTH,
+        severity="critical",
+        title="ElevenLabs rejects the API key",
+        what="ElevenLabs rejecting the API key as invalid or missing (401)",
+        select=provider_lines,
+        next_steps=[
+            "Check the Secret holding the ElevenLabs key: right key, right environment, not empty.",
+            "Check the app sends it in the `xi-api-key` header, spelled exactly that way.",
+            "After fixing the Secret, restart the Deployment so pods read the new value.",
+        ],
+    )
+
+
+@rule("elevenlabs-quota-exceeded", "critical", "ElevenLabs quota or credits exhausted")
+def elevenlabs_quota_exceeded(pod: Pod, snapshot: Snapshot) -> list[Finding]:
+    """402 insufficient_credits (E), quota_exceeded (H), and the 401 "This request exceeds your
+    quota limit" message (C)."""
+    return llm_findings(
+        pod,
+        snapshot,
+        rule_id="elevenlabs-quota-exceeded",
+        pattern=EL_QUOTA,
+        severity="critical",
+        title="ElevenLabs quota or credits exhausted",
+        what="ElevenLabs refusing requests for lack of credits or quota",
+        select=provider_lines,
+        next_steps=[
+            "Check the account's remaining credits and quota in ElevenLabs.",
+            "Add credits or enable usage-based billing if the plan allows it.",
+            "Check for a usage spike or a retry loop burning credits.",
+        ],
+    )
+
+
+@rule("elevenlabs-rate-limited", "warning", "ElevenLabs is rate-limiting")
+def elevenlabs_rate_limited(pod: Pod, snapshot: Snapshot) -> list[Finding]:
+    """429 rate_limit_exceeded, concurrent_limit_exceeded, system_busy (E)."""
+    return llm_findings(
+        pod,
+        snapshot,
+        rule_id="elevenlabs-rate-limited",
+        pattern=EL_RATE,
+        severity="warning",
+        title="ElevenLabs is rate-limiting",
+        what="ElevenLabs rate-limiting requests (429)",
+        select=provider_lines,
+        next_steps=[
+            "Make sure the app retries 429s with exponential backoff, not at once.",
+            "concurrent_limit_exceeded: compare the app's parallel requests with the plan's "
+            "concurrency limit.",
+            "system_busy is on ElevenLabs' side: back off and retry later.",
+        ],
+    )
+
+
+@rule("elevenlabs-voice-not-found", "critical", "ElevenLabs voice ID not found")
+def elevenlabs_voice_not_found(pod: Pod, snapshot: Snapshot) -> list[Finding]:
+    """404 voice_not_found, 400 invalid_voice_id (E; H)."""
+    return llm_findings(
+        pod,
+        snapshot,
+        rule_id="elevenlabs-voice-not-found",
+        pattern=EL_VOICE,
+        severity="critical",
+        title="ElevenLabs voice ID not found",
+        what="ElevenLabs rejecting the voice ID as unknown or malformed",
+        select=provider_lines,
+        next_steps=[
+            "Check the voice ID the app sends (config, env var, request) for typos.",
+            "Confirm the voice exists on the account the key belongs to.",
+            SUPPORT_STEP,
         ],
     )

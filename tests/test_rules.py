@@ -37,7 +37,15 @@ def test_registry_rejects_duplicate_rule_ids():
 
 
 def test_every_rule_has_id_severity_and_title():
-    assert set(REGISTRY) >= {"image-pull-failed", "container-exits-on-start", "oom-killed"}
+    assert set(REGISTRY) >= {
+        "image-pull-failed",
+        "container-exits-on-start",
+        "oom-killed",
+        "elevenlabs-auth-failed",
+        "elevenlabs-quota-exceeded",
+        "elevenlabs-rate-limited",
+        "elevenlabs-voice-not-found",
+    }
     for rule_id, r in REGISTRY.items():
         assert r.id == rule_id and r.title
         assert r.severity in {"critical", "warning", "info"}
@@ -226,12 +234,23 @@ def test_rules_ignore_a_healthy_running_container():
 
 from tidewatch.findings import mask_secrets  # noqa: E402
 from tidewatch.rules import (  # noqa: E402
+    elevenlabs_auth_failed,
+    elevenlabs_quota_exceeded,
+    elevenlabs_rate_limited,
+    elevenlabs_voice_not_found,
     llm_upstream_auth_failed,
     llm_upstream_rate_limited,
     llm_upstream_timeout,
 )
 
-LLM_RULES = [llm_upstream_auth_failed, llm_upstream_rate_limited, llm_upstream_timeout]
+EL_RULES = [
+    elevenlabs_auth_failed,
+    elevenlabs_quota_exceeded,
+    elevenlabs_rate_limited,
+    elevenlabs_voice_not_found,
+]
+# Upstream rules: the generic LLM ones plus the provider-specific ones (ADR 0006).
+LLM_RULES = [llm_upstream_auth_failed, llm_upstream_rate_limited, llm_upstream_timeout, *EL_RULES]
 TS = "2026-11-03T02:40:{:02d}.000000000Z"
 
 
@@ -299,6 +318,7 @@ def test_llm_rules_ignore_access_log_lines_with_401_or_429_in_ports():
         'INFO:     10.244.0.1:40123 - "GET /health HTTP/1.1" 200 OK',
         'INFO:     10.244.0.1:54291 - "POST /v1/chat HTTP/1.1" 200 OK',
         'INFO:     10.244.0.1:4291 - "POST /api/chat HTTP/1.1" 401 Unauthorized',
+        'INFO:     10.244.0.1:4292 - "GET /api/debug?code=system_busy HTTP/1.1" 200 OK',
         "INFO upstream model ok",
     )
     for fn in LLM_RULES:
@@ -451,3 +471,123 @@ def test_mask_time_stays_linear_on_huge_lines():
     for huge in ("a" * 200_000, "a-" * 100_000, "x" * 199_999 + "1"):
         mask_secrets(huge)
     assert time.perf_counter() - start < 1.0  # the old lookahead took minutes here
+
+
+# --- ElevenLabs API rules (ADR 0006) -----------------------------------------------------------
+# Lines use the documented error body: {"detail": {"type", "code", "message", "status" (legacy),
+# "request_id"}} (https://elevenlabs.io/docs/eleven-api/resources/errors). Made-up values.
+
+EL_RID = "3c807fc4c3a1705f9638ecc764a91c01"  # the docs' example request_id shape (32 hex)
+EL_CASES = {  # rule -> (rule_id, severity, documented codes)
+    elevenlabs_auth_failed: (
+        "elevenlabs-auth-failed",
+        "critical",
+        ("invalid_api_key", "missing_api_key"),
+    ),
+    elevenlabs_quota_exceeded: (
+        "elevenlabs-quota-exceeded",
+        "critical",
+        ("insufficient_credits", "quota_exceeded"),
+    ),
+    elevenlabs_rate_limited: (
+        "elevenlabs-rate-limited",
+        "warning",
+        ("rate_limit_exceeded", "concurrent_limit_exceeded", "system_busy"),
+    ),
+    elevenlabs_voice_not_found: (
+        "elevenlabs-voice-not-found",
+        "critical",
+        ("voice_not_found", "invalid_voice_id"),
+    ),
+}
+
+
+def el_error_lines(code):
+    """The same documented error in the shapes an app is likely to log it."""
+    return (
+        f'ERROR tts call failed: {{"detail": {{"type": "x", "code": "{code}", '
+        f'"message": "m", "request_id": "{EL_RID}"}}}}',
+        f"ERROR ApiError: body: {{'detail': {{'status': '{code}', 'message': 'm'}}}}",
+        f"WARN speech request rejected code={code}",
+    )
+
+
+def test_elevenlabs_rules_match_documented_codes():
+    for fn, (rule_id, severity, codes) in EL_CASES.items():
+        for code in codes:
+            for line in el_error_lines(code):
+                (f,) = run(fn, agent_with(line))
+                assert (f.rule_id, f.severity) == (rule_id, severity), line
+                assert EL_RID not in line or any(EL_RID in x for x in f.log_excerpt), line
+                others = [g for g in EL_RULES if g is not fn]
+                assert all(run(g, agent_with(line)) == [] for g in others), line
+
+
+def test_elevenlabs_quota_rule_matches_the_documented_quota_message():
+    line = "ERROR tts api call failed: 401 unauthorized: This request exceeds your quota limit"
+    (f,) = run(elevenlabs_quota_exceeded, agent_with(line))
+    assert f.rule_id == "elevenlabs-quota-exceeded"
+
+
+def test_elevenlabs_rules_ignore_harmless_config_lines():
+    for config in (
+        "INFO tts client config: retry_on=rate_limit_exceeded,system_busy max_concurrency=4",
+        "INFO tts client config: alert_on=insufficient_credits,quota_exceeded",
+        "INFO tts client config: fallback_on=voice_not_found voice_id=demo-voice-1",
+        "INFO tts client config: auth_errors=invalid_api_key,missing_api_key header=xi-api-key",
+        "INFO tts client config: error_code=invalid_api_key status_code=200",
+    ):
+        pod = agent_with(config, "INFO upstream tts ok")
+        for fn in LLM_RULES:
+            assert run(fn, pod) == [], (fn.__name__, config)
+
+
+def test_generic_llm_rules_leave_elevenlabs_lines_to_elevenlabs_rules():
+    claimed = (
+        f'ERROR upstream api call failed: 401 {{"detail": {{"code": "invalid_api_key", '
+        f'"request_id": "{EL_RID}"}}}}',
+        'ERROR upstream api call failed: status 429 {"detail": {"code": "system_busy"}}',
+        "ERROR tts api call failed: 401 unauthorized: This request exceeds your quota limit",
+    )
+    for line in claimed:
+        pod = agent_with(line)
+        findings = [f for fn in LLM_RULES for f in run(fn, pod)]
+        assert len(findings) == 1 and findings[0].rule_id.startswith("elevenlabs-"), line
+    # a code outside a code/status field claims nothing: the generic rule still reports it
+    pod = agent_with("WARN api call failed: 429 retry_on=rate_limit_exceeded")
+    (f,) = [f for fn in LLM_RULES for f in run(fn, pod)]
+    assert f.rule_id == "llm-upstream-rate-limited"
+
+
+def test_elevenlabs_rule_downgrades_when_latest_call_ok():
+    (line, *_) = el_error_lines("voice_not_found")
+    (f,) = run(elevenlabs_voice_not_found, agent_with(line, "INFO upstream tts call ok"))
+    assert f.severity == "warning"
+    assert any(e.startswith("latest upstream call succeeded") for e in f.evidence)
+
+
+def test_mask_hides_elevenlabs_keys_and_xi_api_key_header():
+    key = "sk_0123456789abcdef0123456789abcdef0123456789abcdef"  # gitleaks:allow (made-up)
+    for line, masked in (
+        (f"xi-api-key: {key}", "xi-api-key: ***"),
+        (f'{{"xi-api-key": "{key}"}}', '{"xi-api-key": "***"}'),
+        (f"xi-api-key={key}", "xi-api-key=***"),
+        (f"tts call with key {key} rejected", "tts call with key sk_*** rejected"),
+    ):
+        assert mask_secrets(line) == masked
+    assert mask_secrets("sk_learning_rate_schedule ok") == "sk_learning_rate_schedule ok"
+
+
+def test_mask_keeps_request_id_values_visible():
+    for kept in (
+        f'{{"detail": {{"code": "system_busy", "request_id": "{EL_RID}"}}}}',
+        f"tts 429 request_id={EL_RID}",
+        f"tts 429 x-request-id: {EL_RID}",
+    ):
+        assert mask_secrets(kept) == kept
+    for line, masked in (
+        (f"trace={EL_RID}", "***"),  # not a request_id key
+        (f"tts failed {EL_RID}", "tts failed ***"),  # no key at all
+        ("request_id=Zz3c807fc4c3a1705f9638ecc764a91c01", "***"),  # not 32 hex
+    ):
+        assert mask_secrets(line) == masked
