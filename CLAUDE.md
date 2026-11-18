@@ -33,6 +33,7 @@ It is built with Claude Code as a pair programmer, in small reviewed slices, aga
 
 ## Privacy rules (non-negotiable; privacy beats convenience every time)
 - **Never name real companies or people** in anything committed or pushed: code, docs, README, PLAN.md, ADRs, commit messages, PR text, branch names. Describe goals generically.
+- An approved third-party API may be named in rule IDs, report titles, function names and docs. Approved: ElevenLabs.
 - **Private terms guard:** the gitignored `.private-terms` lists words that must never be committed. `.githooks/` blocks any commit (changes, file names, branch, message) or push that contains one, case-insensitively, and a missing list blocks everything. Enable it in every clone: `git config core.hooksPath .githooks`. Never commit with `--no-verify`.
 - **Lab data only:** fixtures and examples come from the local tidewatch-lab cluster. Never real company clusters, customer logs, kubeconfigs or tokens.
 - **Read-only against clusters:** Tidewatch only gets, lists and reads logs, enforced by a test. Cluster changes happen only in the lab scripts, against tidewatch-lab.

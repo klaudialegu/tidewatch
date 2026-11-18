@@ -181,3 +181,25 @@ def test_rules_still_match_after_snapshot_masking():
     report = diagnose(Snapshot.model_validate(data), now=T0)
     assert rule_ids(report) == ["llm-upstream-auth-failed"]
     assert fake_key not in report.model_dump_json()
+
+
+def test_elevenlabs_rules_still_match_after_snapshot_masking():
+    import json
+
+    from tidewatch.snapshot import Snapshot
+
+    fake_key = "sk_0123456789abcdef0123456789abcdef0123456789abcdef"  # gitleaks:allow (made-up)
+    rid = "3c807fc4c3a1705f9638ecc764a91c01"
+    line = (
+        f"2026-11-03T02:44:44.346091833Z ERROR tts call failed with key {fake_key}: "
+        f'{{"detail": {{"code": "voice_not_found", "request_id": "{rid}"}}}}'
+    )
+    data = json.loads((FIXTURES / "healthy.json").read_text())
+    for p in data["pods"]:
+        for c in p["containers"]:
+            if c["name"] == "agent":
+                c["recent_logs"] = [line]
+    report = diagnose(Snapshot.model_validate(data), now=T0)
+    assert rule_ids(report) == ["elevenlabs-voice-not-found"]
+    dumped = report.model_dump_json()
+    assert fake_key not in dumped and "sk_***" in dumped and rid in dumped
