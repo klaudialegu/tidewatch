@@ -503,7 +503,7 @@ def provider_lines(c: ContainerStatus) -> list[LogLine]:
     ]
 
 
-SUPPORT_STEP = "If it persists, contact ElevenLabs support with the request_id from the error."
+SUPPORT_STEP = "If it persists, contact the provider's support with the request_id from the error."
 
 
 @rule("elevenlabs-auth-failed", "critical", "ElevenLabs rejects the API key")
@@ -517,10 +517,10 @@ def elevenlabs_auth_failed(pod: Pod, snapshot: Snapshot) -> list[Finding]:
         pattern=EL_AUTH,
         severity="critical",
         title="ElevenLabs rejects the API key",
-        what="ElevenLabs rejecting the API key as invalid or missing (401)",
+        what="the provider rejecting the API key as invalid or missing (401)",
         select=provider_lines,
         next_steps=[
-            "Check the Secret holding the ElevenLabs key: right key, right environment, not empty.",
+            "Check the Secret holding the provider key: right key, right environment, not empty.",
             "Check the app sends it in the `xi-api-key` header, spelled exactly that way.",
             "After fixing the Secret, restart the Deployment so pods read the new value.",
         ],
@@ -538,10 +538,10 @@ def elevenlabs_quota_exceeded(pod: Pod, snapshot: Snapshot) -> list[Finding]:
         pattern=EL_QUOTA,
         severity="critical",
         title="ElevenLabs quota or credits exhausted",
-        what="ElevenLabs refusing requests for lack of credits or quota",
+        what="the provider refusing requests for lack of credits or quota",
         select=provider_lines,
         next_steps=[
-            "Check the account's remaining credits and quota in ElevenLabs.",
+            "Check the account's remaining credits and quota with the provider.",
             "Add credits or enable usage-based billing if the plan allows it.",
             "Check for a usage spike or a retry loop burning credits.",
             SUPPORT_STEP,
@@ -559,13 +559,13 @@ def elevenlabs_rate_limited(pod: Pod, snapshot: Snapshot) -> list[Finding]:
         pattern=EL_RATE,
         severity="warning",
         title="ElevenLabs is rate-limiting",
-        what="ElevenLabs rate-limiting requests (429)",
+        what="the provider rate-limiting requests (429)",
         select=provider_lines,
         next_steps=[
             "Make sure the app retries 429s with exponential backoff, not at once.",
             "concurrent_limit_exceeded: compare the app's parallel requests with the plan's "
             "concurrency limit.",
-            "system_busy is on ElevenLabs' side: back off and retry later.",
+            "system_busy is on the provider's side: back off and retry later.",
             SUPPORT_STEP,
         ],
     )
@@ -581,7 +581,7 @@ def elevenlabs_voice_not_found(pod: Pod, snapshot: Snapshot) -> list[Finding]:
         pattern=EL_VOICE,
         severity="critical",
         title="ElevenLabs voice ID not found",
-        what="ElevenLabs rejecting the voice ID as unknown or malformed",
+        what="the provider rejecting the voice ID as unknown or malformed",
         select=provider_lines,
         next_steps=[
             "Check the voice ID the app sends (config, env var, request) for typos.",

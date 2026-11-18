@@ -443,6 +443,9 @@ def test_mask_hides_json_quoted_keys_and_basic_auth():
         ("OPENAI_API_KEY=abc", "OPENAI_API_KEY=***"),
     ):
         assert mask_secrets(line) == masked
+    # a backslash inside a plain value doesn't end it (only a backslash before a quote does)
+    assert mask_secrets(r"db password=Pa\ss0rd!x connecting") == "db password=*** connecting"
+    assert mask_secrets(r"token=ab\cd") == "token=***"
     for kept in ("max_tokens=1000", "usage tokens: 5"):
         assert mask_secrets(kept) == kept
 

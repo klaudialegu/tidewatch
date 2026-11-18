@@ -7,7 +7,7 @@ import re
 # masking: it catches common key shapes, not every possible secret.
 _MASKS = [
     (re.compile(r"\b(sk|pk|rk)-[A-Za-z0-9_\-]{6,}"), r"\1-***"),
-    # `sk_` keys (ElevenLabs style): keep the prefix, mask the rest when it has a digit.
+    # `sk_` keys: keep the prefix, mask the rest when it has a digit.
     (re.compile(r"\bsk_[A-Za-z0-9_]{20,}"), lambda m: _mask_sk_underscore(m)),
     (re.compile(r"\b(Bearer)\s+\S+", re.IGNORECASE), r"\1 ***"),
     (re.compile(r"\b(Authorization\s*[=:]\s*Basic)\s+\S+", re.IGNORECASE), r"\1 ***"),
@@ -16,7 +16,9 @@ _MASKS = [
     (
         re.compile(
             r"\b([A-Za-z0-9_-]{0,30}?(?:api[_-]?key|token|secret|password))"
-            r"(\\?[\"']?\s*[=:]\s*\\?[\"']?)[^\s\"',}\\]+",
+            # the value stops at a backslash only before a quote (an escaped JSON end), so a
+            # plain value containing a backslash is masked whole
+            r"(\\?[\"']?\s*[=:]\s*\\?[\"']?)(?:[^\s\"',}\\]|\\(?![\"']))+",
             re.IGNORECASE,
         ),
         r"\1\2***",
