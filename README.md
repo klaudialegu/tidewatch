@@ -34,6 +34,12 @@ Because diagnosis runs on a snapshot, you can scan offline: `tidewatch scan --fr
 | `llm-upstream-auth-failed` | critical | The LLM provider rejects the credentials (401/403) while the pod looks healthy. |
 | `llm-upstream-rate-limited` | warning | The LLM provider is rate-limiting (429). |
 | `llm-upstream-timeout` | critical | Calls to the LLM provider time out. |
+| `elevenlabs-auth-failed` | critical | ElevenLabs rejects the API key as invalid or missing (`invalid_api_key`, `missing_api_key`). |
+| `elevenlabs-quota-exceeded` | critical | ElevenLabs refuses requests for lack of credits or quota (`insufficient_credits`, `quota_exceeded`). |
+| `elevenlabs-rate-limited` | warning | ElevenLabs is rate-limiting (`rate_limit_exceeded`, `concurrent_limit_exceeded`, `system_busy`). |
+| `elevenlabs-voice-not-found` | critical | ElevenLabs rejects the voice ID as unknown or malformed (`voice_not_found`, `invalid_voice_id`). |
+
+The ElevenLabs rules only match error codes from [ElevenLabs' error docs](https://elevenlabs.io/docs/eleven-api/resources/errors), and only in a code or status field, so a config line naming a code doesn't count. A line they match isn't also reported by the generic LLM rules ([ADR 0006](docs/decisions/0006-provider-rules-from-documented-error-codes.md)).
 
 Severity reflects the snapshot. A container that's running again drops to warning (or info after a node or runtime restart), and an LLM finding drops one level when the latest upstream call succeeded. Tidewatch states facts and never calls anything "healthy".
 
@@ -95,7 +101,7 @@ lab/scenario.sh reset
 
 - **Read-only:** the only Kubernetes calls are read the namespace (to check it exists), list pods, read pod logs, list deployments and list events. An allowlist test fails if any other call appears.
 - **Bounded logs:** a capped number of recent lines per container. A finding's excerpt holds only the lines a rule matched (at most 3).
-- **Masking (minimal redaction):** key-like tokens in every snapshot log line and message, and so in every report excerpt, (`sk-…`, Bearer and Basic auth, `api_key=…`, `"access_token": "…"`, long mixed-character strings; values of keys named like `token`, `secret` or `password`) become `***` (an `sk-` style prefix stays visible). Provider request IDs (`req_…`, `chatcmpl-…`) stay visible, because provider support asks for them. An older unmasked snapshot is masked when it's loaded. It's pattern-based: it catches common key shapes, not every secret, and object names, hostnames and image references stay as they are ([ADR 0005](docs/decisions/0005-minimal-redaction-in-snapshots.md)).
+- **Masking (minimal redaction):** key-like tokens in every snapshot log line and message, and so in every report excerpt, (`sk-…` and `sk_…`, Bearer and Basic auth, the `xi-api-key` header, `api_key=…`, `"access_token": "…"`, long mixed-character strings; values of keys named like `token`, `secret` or `password`) become `***` (an `sk-` style prefix stays visible). Provider request IDs (`req_…`, `chatcmpl-…`, and a 32-hex value under a `request_id` key) stay visible, because provider support asks for them. An older unmasked snapshot is masked when it's loaded. It's pattern-based: it catches common key shapes, not every secret, and object names, hostnames and image references stay as they are ([ADR 0005](docs/decisions/0005-minimal-redaction-in-snapshots.md)).
 - **Lab data only:** every fixture in this repo comes from the local lab cluster.
 
 ## How it compares
