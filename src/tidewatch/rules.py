@@ -458,7 +458,19 @@ def llm_upstream_timeout(pod: Pod, snapshot: Snapshot) -> list[Finding]:
 
 
 def documented_code(*codes: str) -> str:
-    return r"(?<![\w-])[\"']?(?:code|status)[\"']?\s*[:=]\s*[\"']?(?:" + "|".join(codes) + r")\b"
+    # `\?`: a body logged as a string inside a JSON log line has escaped quotes (\"code\").
+    q = r"\\?[\"']?"
+    return (
+        r"(?<![\w-])"
+        + q
+        + r"(?:code|status)"
+        + q
+        + r"\s*[:=]\s*"
+        + q
+        + r"(?:"
+        + "|".join(codes)
+        + r")\b"
+    )
 
 
 EL_AUTH = re.compile(documented_code("invalid_api_key", "missing_api_key"), re.IGNORECASE)
@@ -532,6 +544,7 @@ def elevenlabs_quota_exceeded(pod: Pod, snapshot: Snapshot) -> list[Finding]:
             "Check the account's remaining credits and quota in ElevenLabs.",
             "Add credits or enable usage-based billing if the plan allows it.",
             "Check for a usage spike or a retry loop burning credits.",
+            SUPPORT_STEP,
         ],
     )
 
@@ -553,6 +566,7 @@ def elevenlabs_rate_limited(pod: Pod, snapshot: Snapshot) -> list[Finding]:
             "concurrent_limit_exceeded: compare the app's parallel requests with the plan's "
             "concurrency limit.",
             "system_busy is on ElevenLabs' side: back off and retry later.",
+            SUPPORT_STEP,
         ],
     )
 

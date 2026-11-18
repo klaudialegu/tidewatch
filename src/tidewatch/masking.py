@@ -11,10 +11,12 @@ _MASKS = [
     (re.compile(r"\bsk_[A-Za-z0-9_]{20,}"), lambda m: _mask_sk_underscore(m)),
     (re.compile(r"\b(Bearer)\s+\S+", re.IGNORECASE), r"\1 ***"),
     (re.compile(r"\b(Authorization\s*[=:]\s*Basic)\s+\S+", re.IGNORECASE), r"\1 ***"),
-    (  # key=value, key: value, JSON-quoted "key": "value"; prefixed names like client_secret
+    # key=value, key: value, JSON-quoted "key": "value" (also escaped: \"key\": \"value\"), and
+    # prefixed names like client_secret.
+    (
         re.compile(
             r"\b([A-Za-z0-9_-]{0,30}?(?:api[_-]?key|token|secret|password))"
-            r"([\"']?\s*[=:]\s*[\"']?)[^\s\"',}]+",
+            r"(\\?[\"']?\s*[=:]\s*\\?[\"']?)[^\s\"',}\\]+",
             re.IGNORECASE,
         ),
         r"\1\2***",
@@ -25,7 +27,7 @@ _MASKS = [
 ]
 
 
-REQUEST_ID_KEY = re.compile(r"request[_-]id[\"']?\s*[:=]\s*[\"']?$", re.IGNORECASE)
+REQUEST_ID_KEY = re.compile(r"request[_-]id\\?[\"']?\s*[:=]\s*\\?[\"']?$", re.IGNORECASE)
 HEX32 = re.compile(r"[0-9a-f]{32}")
 
 

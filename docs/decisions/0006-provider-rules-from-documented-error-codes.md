@@ -12,7 +12,7 @@ A provider gets its own rules only for errors its current docs document. Each ru
 - [Changelog 2025-05-05](https://elevenlabs.io/docs/changelog/2025/5/5): the 401 message "This request exceeds your quota limit".
 - [Authentication](https://elevenlabs.io/docs/api-reference/authentication): the key travels in the `xi-api-key` header.
 
-A code matches only as the value of a `code` or `status` field (`"code": "x"`, `'status': 'x'`, `code=x`). A line a provider rule matches is left out of the generic LLM rules, so one log line gives one finding, the more specific one. Masking keeps `sk_` key prefixes and masks the rest. ElevenLabs request IDs (32 hex characters, no prefix) stay visible only as the value of a `request_id` key.
+A code matches only as the value of a `code` or `status` field (`"code": "x"`, `'status': 'x'`, `code=x`, and the escaped `\"code\": \"x\"` of a body logged inside a JSON log line). A line a provider rule matches is left out of the generic LLM rules, so one log line gives one finding, the more specific one. Masking keeps `sk_` key prefixes and masks the rest. ElevenLabs request IDs (32 hex characters, no prefix) stay visible only as the value of a `request_id` key.
 
 ## Options considered
 - Extend the generic LLM rules with these strings: the next steps would stay generic ("check the key") when the docs give a precise cause.

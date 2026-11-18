@@ -509,6 +509,9 @@ def el_error_lines(code):
         f'"message": "m", "request_id": "{EL_RID}"}}}}',
         f"ERROR ApiError: body: {{'detail': {{'status': '{code}', 'message': 'm'}}}}",
         f"WARN speech request rejected code={code}",
+        # a JSON log line holding the body as a string: its quotes are escaped
+        f'{{"level": "error", "msg": "tts call failed", "body": "{{\\"detail\\": '
+        f'{{\\"code\\": \\"{code}\\", \\"request_id\\": \\"{EL_RID}\\"}}}}"}}',
     )
 
 
@@ -572,6 +575,10 @@ def test_mask_hides_elevenlabs_keys_and_xi_api_key_header():
         (f"xi-api-key: {key}", "xi-api-key: ***"),
         (f'{{"xi-api-key": "{key}"}}', '{"xi-api-key": "***"}'),
         (f"xi-api-key={key}", "xi-api-key=***"),
+        (
+            f'{{"headers": "{{\\"xi-api-key\\": \\"{key}\\"}}"}}',
+            '{"headers": "{\\"xi-api-key\\": \\"***\\"}"}',
+        ),
         (f"tts call with key {key} rejected", "tts call with key sk_*** rejected"),
     ):
         assert mask_secrets(line) == masked
